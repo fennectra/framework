@@ -101,11 +101,29 @@ by `frankenphp_handle_request()`. Includes the scheduler, metrics, and cleanup
 $app->runWorker();
 ```
 
+## OpenAPI Documentation
+
+The built-in `DocsController` auto-generates an OpenAPI 3.0.3 specification from your routes and DTOs.
+
+**Server URL auto-detection**: if `APP_URL` is not set, the server URL is automatically detected from the incoming HTTP request (scheme, host, port). This means you do not need to configure `APP_URL` for development or single-server deployments.
+
+**Customizable metadata**: the OpenAPI `info` block reads from environment variables:
+- `APP_NAME` — title (default: `Fennectra API`)
+- `APP_DESCRIPTION` — description (default: `REST API built with Fennectra`)
+- `APP_VERSION` — version (default: `1.0.0`)
+
+**OAuth2 token URL**: the OAuth2 password flow `tokenUrl` is configurable via `AUTH_TOKEN_URL` (default: `/auth/login`).
+
 ## Configuration
 
 | Variable | Description | Default |
 |---|---|---|
 | `APP_ENV` | Environment (`dev`/`prod`) | `prod` |
+| `APP_NAME` | Application name (used in OpenAPI docs) | `Fennectra API` |
+| `APP_DESCRIPTION` | Application description (OpenAPI) | `REST API built with Fennectra` |
+| `APP_VERSION` | API version (OpenAPI) | `1.0.0` |
+| `APP_URL` | Base URL for OpenAPI server; if empty, auto-detected from the HTTP request | _(auto-detect)_ |
+| `AUTH_TOKEN_URL` | OAuth2 token URL in OpenAPI spec | `/auth/login` |
 | `EVENT_BROKER` | Event driver (`sync`/`redis`/`database`) | `sync` |
 | `PROFILER_ENABLED` | Enable the profiler | `1` in dev, `0` in prod |
 | `STORAGE_DRIVER` | Storage driver (`local`/`s3`) | `local` |
@@ -168,6 +186,7 @@ $app->runWorker();
 
 | File | Role | Last Modified |
 |---|---|---|
-| `src/Core/App.php` | Main App class | 2026-03-22 |
+| `src/Core/App.php` | Main App class | 2026-03-23 |
+| `src/Controllers/DocsController.php` | OpenAPI spec generator (auto-detect URL) | 2026-03-23 |
 | `src/Commands/ServeCommand.php` | `serve` command | 2026-03-21 |
 | `src/Commands/CacheRoutesCommand.php` | `cache:routes` command | 2026-03-21 |

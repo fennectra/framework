@@ -8,6 +8,9 @@
         <testsuite name="Unit">
             <directory>../tests/Unit</directory>
         </testsuite>
+        <testsuite name="Integration">
+            <directory>../tests/Integration</directory>
+        </testsuite>
     </testsuites>
     <php>
         <env name="JWT_SECRET" value="test_secret_key_for_unit_tests"/>

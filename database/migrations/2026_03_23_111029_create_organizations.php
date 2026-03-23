@@ -1,0 +1,6 @@
+<?php
+
+return [
+    'up' => 'CREATE TABLE IF NOT EXISTS organizations ( id BIGSERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, slug VARCHAR(255) NOT NULL UNIQUE, owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, logo VARCHAR(500) DEFAULT NULL, description TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())',
+    'down' => 'DROP TABLE IF EXISTS organizations',
+];

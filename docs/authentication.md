@@ -1,19 +1,84 @@
 # Authentication
-> Complete JWT authentication with password policy, account lockout and security logging.
+> Complete JWT authentication with full RBAC (Role-Based Access Control), password policy, account lockout and security logging.
 
 ## Overview
 
 The Fennec Authentication module covers the entire access security chain:
 
 - **`JwtService`**: JWT token generation and validation (access + refresh) via `firebase/php-jwt`.
-- **`AuthMiddleware`**: middleware verifying the Bearer token and user roles.
+- **`AuthMiddleware`**: middleware verifying the Bearer token, user roles and permissions via `role:X` and `permission:X` constraints.
 - **`PasswordPolicy`**: password strength validation (ISO 27001 A.8.5).
 - **`AccountLockout`**: automatic lockout after N failed attempts.
 - **`SecurityLogger`**: security event logging with HMAC chain (SOC 2 + ISO 27001).
+- **RBAC system**: full role-based access control with User, Role, Permission models and pivot tables.
 
 The JWT token is encoded in HS256, verified in the database to detect revocations, and TTLs are configurable via environment variables.
 
 **Optimization**: token creation (login/refresh) uses a single PostgreSQL CTE query (`WITH ... INSERT`) instead of two separate queries (`UPDATE` + `INSERT`) in a transaction. This reduces DB round-trips from 4 to 1.
+
+## RBAC Architecture
+
+The `make:auth` command generates a complete RBAC system with the following database schema:
+
+### Tables
+
+| Table | Purpose |
+|---|---|
+| `users` | User accounts (email, password, activation, soft deletes) |
+| `roles` | Named roles with guard and description (e.g. admin, manager, user) |
+| `permissions` | Named permissions (e.g. users.create, roles.update) |
+| `role_permissions` | Pivot: which permissions belong to which role |
+| `user_roles` | Pivot: which roles are assigned to which user |
+| `personal_access_tokens` | API tokens for programmatic access |
+
+### Permission Chain
+
+```
+user -> user_roles -> roles -> role_permissions -> permissions
+```
+
+A user can have multiple roles, and each role can have multiple permissions. Permission checks traverse the full chain.
+
+### User Model RBAC Methods
+
+The generated `User` model includes:
+
+```php
+$user->roles();                    // Get all Role objects via user_roles pivot
+$user->permissions();              // Get all Permission objects via the full chain
+$user->hasRole('admin');           // Check if user has a specific role
+$user->hasPermission('users.create'); // Check permission via any assigned role
+$user->assignRole('manager');      // Assign a role by name or ID
+$user->removeRole('manager');      // Remove a role by name or ID
+```
+
+### Auth Middleware
+
+The generated `Auth` middleware uses `JwtService` (not manual base64) for token validation and supports role/permission constraints in route definitions:
+
+```php
+// Just authentication
+$router->get('/profile', [ProfileController::class, 'show'], [Auth::class, []]);
+
+// Require a specific role
+$router->get('/admin/dashboard', [AdminController::class, 'index'], [Auth::class, ['role:admin']]);
+
+// Require a specific permission
+$router->post('/users', [UserController::class, 'store'], [Auth::class, ['permission:users.create']]);
+```
+
+### AuthSeeder
+
+The `AuthSeeder` creates a default RBAC matrix:
+
+**3 roles**: `admin`, `manager`, `user`
+
+**16 permissions** (CRUD for 4 resources): `users.*`, `roles.*`, `permissions.*`, `organizations.*`
+
+**Role-permission matrix**:
+- **admin**: all 16 permissions
+- **manager**: `users.read`, `users.update`, `organizations.*` (CRUD)
+- **user**: `users.read` (own profile only)
 
 ## Diagram
 
@@ -179,10 +244,11 @@ SecurityLogger::resetRequestState();
 
 | Module | Integration |
 |---|---|
-| **Middleware** | `AuthMiddleware` uses `JwtService` for token validation |
-| **Router** | Auth middleware registered per route or per group |
+| **Middleware** | `Auth` middleware uses `JwtService` for token validation, supports `role:X` and `permission:X` constraints |
+| **Router** | Auth middleware registered per route or per group with optional RBAC params |
 | **Container** | `JwtService` resolved via dependency injection |
-| **Model (User)** | `User::findByEmailAndToken()` for DB verification |
+| **Model (User)** | `User::findByEmailAndToken()` for DB verification, RBAC methods via pivot queries |
+| **Model (Role/Permission)** | Generated models for roles and permissions management |
 | **Profiler** | Auth middleware execution time measured |
 | **Worker** | `SecurityLogger::resetRequestState()` called between requests, bounded LRU cache |
 
@@ -254,8 +320,14 @@ class AuthController
 | File | Role |
 |---|---|
 | `src/Core/JwtService.php` | JWT service (encode, decode, access/refresh tokens) |
-| `src/Middleware/AuthMiddleware.php` | Authentication middleware + roles |
+| `src/Middleware/AuthMiddleware.php` | Framework-level authentication middleware |
 | `src/Core/Security/PasswordPolicy.php` | Password policy |
 | `src/Core/Security/AccountLockout.php` | Account lockout |
 | `src/Core/Security/SecurityLogger.php` | Security logger with HMAC |
-| `app/Middleware/Auth.php` | Legacy auth middleware (old style) |
+| `src/Commands/MakeAuthCommand.php` | Generator: full auth module with RBAC |
+| `app/Middleware/Auth.php` | Generated auth middleware (JwtService + role/permission checks) |
+| `app/Models/User.php` | Generated User model with RBAC methods |
+| `app/Models/Role.php` | Generated Role model |
+| `app/Models/Permission.php` | Generated Permission model |
+| `app/Models/PersonalAccessToken.php` | Generated PAT model |
+| `database/seeders/AuthSeeder.php` | Default roles, permissions and role-permission matrix |

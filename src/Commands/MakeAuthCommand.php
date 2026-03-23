@@ -2036,13 +2036,12 @@ PHP;
 <?php
 
 use Fennec\Core\DB;
-use Fennec\Core\Seeder;
+use Fennec\Core\Migration\Seeder;
 
 class AuthSeeder extends Seeder
 {
     public function run(): void
     {
-        $db = DB::getInstance();
         $now = date('Y-m-d H:i:s');
 
         // Default roles
@@ -2053,7 +2052,7 @@ class AuthSeeder extends Seeder
         ];
 
         foreach ($roles as $role) {
-            $db->raw(
+            DB::raw(
                 'INSERT INTO roles (name, description, created_at, updated_at) VALUES (:name, :description, :now, :now)',
                 ['name' => $role['name'], 'description' => $role['description'], 'now' => $now]
             );
@@ -2067,34 +2066,33 @@ class AuthSeeder extends Seeder
         foreach ($resources as $resource) {
             foreach ($actions as $action) {
                 $name = "{$resource}.{$action}";
-                $db->raw(
+                DB::raw(
                     'INSERT INTO permissions (name, description, created_at, updated_at) VALUES (:name, :description, :now, :now)',
                     ['name' => $name, 'description' => ucfirst($action) . ' ' . $resource, 'now' => $now]
                 );
-                // Get the inserted permission ID
-                $stmt = $db->raw('SELECT id FROM permissions WHERE name = :name', ['name' => $name]);
+                $stmt = DB::raw('SELECT id FROM permissions WHERE name = :name', ['name' => $name]);
                 $permissionIds[$name] = $stmt->fetchColumn();
             }
         }
 
         // Get role IDs
-        $adminId = $db->raw('SELECT id FROM roles WHERE name = :name', ['name' => 'admin'])->fetchColumn();
-        $managerId = $db->raw('SELECT id FROM roles WHERE name = :name', ['name' => 'manager'])->fetchColumn();
-        $userId = $db->raw('SELECT id FROM roles WHERE name = :name', ['name' => 'user'])->fetchColumn();
+        $adminId = DB::raw('SELECT id FROM roles WHERE name = :name', ['name' => 'admin'])->fetchColumn();
+        $managerId = DB::raw('SELECT id FROM roles WHERE name = :name', ['name' => 'manager'])->fetchColumn();
+        $userId = DB::raw('SELECT id FROM roles WHERE name = :name', ['name' => 'user'])->fetchColumn();
 
         // Admin gets ALL permissions
         foreach ($permissionIds as $permId) {
-            $db->raw(
+            DB::raw(
                 'INSERT INTO role_permissions (role_id, permission_id) VALUES (:rid, :pid)',
                 ['rid' => $adminId, 'pid' => $permId]
             );
         }
 
-        // Manager gets read + update on users and organizations, full on roles
+        // Manager gets read + update on users and organizations
         $managerPerms = ['users.read', 'users.update', 'organizations.create', 'organizations.read', 'organizations.update', 'organizations.delete'];
         foreach ($managerPerms as $perm) {
             if (isset($permissionIds[$perm])) {
-                $db->raw(
+                DB::raw(
                     'INSERT INTO role_permissions (role_id, permission_id) VALUES (:rid, :pid)',
                     ['rid' => $managerId, 'pid' => $permissionIds[$perm]]
                 );
@@ -2105,7 +2103,7 @@ class AuthSeeder extends Seeder
         $userPerms = ['users.read', 'organizations.read'];
         foreach ($userPerms as $perm) {
             if (isset($permissionIds[$perm])) {
-                $db->raw(
+                DB::raw(
                     'INSERT INTO role_permissions (role_id, permission_id) VALUES (:rid, :pid)',
                     ['rid' => $userId, 'pid' => $permissionIds[$perm]]
                 );
@@ -2113,7 +2111,7 @@ class AuthSeeder extends Seeder
         }
 
         // Create default admin user
-        $db->raw(
+        DB::raw(
             'INSERT INTO users (name, email, password, is_active, activated_at, created_at, updated_at) VALUES (:name, :email, :password, 1, :now, :now, :now)',
             [
                 'name' => 'Admin',
@@ -2124,8 +2122,8 @@ class AuthSeeder extends Seeder
         );
 
         // Assign admin role to admin user via user_roles pivot
-        $adminUserId = $db->raw('SELECT id FROM users WHERE email = :email', ['email' => 'admin@fennectra.dev'])->fetchColumn();
-        $db->raw(
+        $adminUserId = DB::raw('SELECT id FROM users WHERE email = :email', ['email' => 'admin@fennectra.dev'])->fetchColumn();
+        DB::raw(
             'INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid)',
             ['uid' => $adminUserId, 'rid' => $adminId]
         );

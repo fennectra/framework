@@ -136,13 +136,14 @@ All available commands in `src/Commands/`:
 | `db:seed` | Run seeders [--class=DatabaseSeeder]                                    |
 | `tinker`  | Execute an SQL query and display the result                          |
 
-### Cache and Quality
+### Cache, Quality and Testing
 
-| Command       | Description                                        |
-|----------------|----------------------------------------------------|
-| `cache:clear`  | Clear all caches                              |
-| `cache:routes` | Pre-compile the route cache                   |
-| `quality`      | Check types, style, and code quality [--fix]  |
+| Command             | Description                                                                        |
+|----------------------|------------------------------------------------------------------------------------|
+| `cache:clear`        | Clear all caches                                                                  |
+| `cache:routes`       | Pre-compile the route cache                                                       |
+| `quality`            | Check code quality: types, style, tests [--fix] [--framework]                     |
+| `test:integration`   | Generate temp app, run all make:\* commands, migrate, seed, run integration tests [--keep] |
 
 ### Queue and Scheduling
 
@@ -167,6 +168,31 @@ All available commands in `src/Commands/`:
 |----------------|-------------------------------------------------------|
 | `storage:link` | Create the symbolic link public/storage -> storage/   |
 | `feature`      | Manage feature flags [enable\|disable\|list\|delete] \<name\> |
+
+## Quality Command Details
+
+The `quality` command auto-detects whether it runs inside an **application** (has `app/` directory) or in **framework development** mode. Pass `--framework` to force framework mode.
+
+**App mode** (default when `app/` exists):
+- CS-Fixer runs on `app/` with `@PSR12` rules
+- PHPStan analyses `app/` at level 5 (excluding `Routes/`); uses the project `phpstan.neon` if present at the project root
+- PHPUnit uses the app's `tests/phpunit.xml` if available
+
+**Framework mode** (`--framework` or no `app/` directory):
+- CS-Fixer, PHPStan, and PHPUnit use their respective config files in `config/`
+
+## Integration Test Command
+
+`./forge test:integration [--keep]` runs a full end-to-end validation:
+
+1. **Creates a temp skeleton** with SQLite database and minimal config
+2. **Runs all module generators**: `make:auth`, `make:organization`, `make:email`, `make:audit`, `make:nf525`, `make:rgpd`, `make:webhook`
+3. **Runs migrations** on the temp SQLite database
+4. **Seeds the database** via `AuthSeeder`
+5. **Runs PHPUnit integration test suite** (`--testsuite=Integration`)
+6. **Cleans up** the temp directory (pass `--keep` to preserve it for debugging)
+
+Each step runs in a subprocess with `FENNEC_BASE_PATH` pointing to the temp skeleton, ensuring isolation from the development environment.
 
 ## Configuration
 
@@ -222,12 +248,24 @@ Place this file in `app/Commands/CleanupCommand.php`. It will be automatically d
 ### Display help
 
 ```bash
+./forge
+# or
 ./forge help
 # or
 ./forge --help
 ```
 
-Displays the Fennec logo and the list of all available commands with their descriptions.
+Running `./forge` with no arguments displays the Fennec banner and a **grouped help** listing.
+Commands are organized by theme: **Scaffolding**, **Database**, **Server**, **Queue & Jobs**, **Features**, **Compliance**, and **Tools**.
+
+### List commands in a group
+
+```bash
+./forge make
+```
+
+Running `./forge <group>` (without a colon) lists only the commands in that group.
+For example, `./forge make` shows all `make:*` subcommands with their descriptions.
 
 ## Module Files
 
@@ -235,6 +273,8 @@ Displays the Fennec logo and the list of all available commands with their descr
 |---------|------|
 | `./forge` | CLI entry point |
 | `src/Core/Cli/CommandInterface.php` | Command interface |
-| `src/Core/Cli/CommandRunner.php` | Discovery and execution |
+| `src/Core/Cli/CommandRunner.php` | Discovery, grouping and execution |
 | `src/Attributes/Command.php` | Declaration attribute |
-| `src/Commands/*.php` | 33 framework commands |
+| `src/Commands/QualityCommand.php` | Code quality checks (app/framework mode) |
+| `src/Commands/TestIntegrationCommand.php` | End-to-end integration test runner |
+| `src/Commands/*.php` | 33+ framework commands |
