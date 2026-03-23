@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08 — Framework Exercises</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Exercices &mdash; Framework</h1>
+  <p>Mettre en pratique les concepts du framework</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 08 &mdash; Framework Exercises</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- Exercise 1 -->
+<!-- ════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Exercice 1 <span class="badge badge-beginner">Beginner</span></h2>
+
+  <div class="exercise">
+    <div class="exercise-title">Create a complete CRUD</div>
+
+    <p>Le framework fournit une commande CLI pour generer automatically toute la structure CRUD d'une entite. Lancez la commande suivante :</p>
+
+<pre><code><span class="function">./forge</span> make:all Article <span class="string">--roles=admin</span></code></pre>
+
+    <p>This command generates the following files:</p>
+
+    <table>
+      <thead><tr><th>File</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><code>app/Models/Article.php</code></td><td>The ORM model with properties and relations</td></tr>
+        <tr><td><code>app/Controllers/ArticleController.php</code></td><td>The controller with index, show, store, update, delete methods</td></tr>
+        <tr><td><code>app/Dto/Article/ArticleRequest.php</code></td><td>The validation DTO for incoming requests</td></tr>
+        <tr><td><code>routes/article.php</code></td><td>REST routes linked to the controller</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Goal:</strong> Customize the generated controller to add pagination on the <code>index()</code> method.</p>
+
+    <details>
+      <summary>Solution</summary>
+      <div class="details-body">
+<pre><code><span class="keyword">class</span> <span class="type">ArticleController</span>
+{
+    <span class="keyword">public function</span> <span class="function">index</span>(): <span class="type">array</span>
+    {
+        <span class="variable">$page</span>    = (<span class="keyword">int</span>) (<span class="variable">$_GET</span>[<span class="string">'page'</span>] ?? <span class="number">1</span>);
+        <span class="variable">$perPage</span> = (<span class="keyword">int</span>) (<span class="variable">$_GET</span>[<span class="string">'per_page'</span>] ?? <span class="number">15</span>);
+        <span class="variable">$offset</span>  = (<span class="variable">$page</span> - <span class="number">1</span>) * <span class="variable">$perPage</span>;
+
+        <span class="variable">$articles</span> = <span class="type">Article</span>::<span class="function">query</span>()
+            -><span class="function">orderBy</span>(<span class="string">'created_at'</span>, <span class="string">'DESC'</span>)
+            -><span class="function">limit</span>(<span class="variable">$perPage</span>)
+            -><span class="function">offset</span>(<span class="variable">$offset</span>)
+            -><span class="function">get</span>();
+
+        <span class="variable">$total</span> = <span class="type">Article</span>::<span class="function">query</span>()-><span class="function">count</span>();
+
+        <span class="keyword">return</span> [
+            <span class="string">'data'</span>       => <span class="variable">$articles</span>,
+            <span class="string">'page'</span>       => <span class="variable">$page</span>,
+            <span class="string">'per_page'</span>   => <span class="variable">$perPage</span>,
+            <span class="string">'total'</span>      => <span class="variable">$total</span>,
+            <span class="string">'last_page'</span>  => (<span class="keyword">int</span>) <span class="function">ceil</span>(<span class="variable">$total</span> / <span class="variable">$perPage</span>),
+        ];
+    }
+}</code></pre>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- Exercise 2 -->
+<!-- ════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Exercice 2 <span class="badge badge-beginner">Beginner</span></h2>
+
+  <div class="exercise">
+    <div class="exercise-title">Routes &amp; Dynamic Params</div>
+
+    <p>Given the following URL pattern:</p>
+
+<pre><code><span class="string">/blog/{slug}/comments/{id}</span></code></pre>
+
+    <p><strong>Goal:</strong> Write the route definition and the corresponding controller method signature.</p>
+
+    <details>
+      <summary>Solution</summary>
+      <div class="details-body">
+        <p><strong>Route definition:</strong></p>
+<pre><code><span class="comment">// routes/blog.php</span>
+
+<span class="variable">$router</span>-><span class="function">get</span>(
+    <span class="string">'/blog/{slug}/comments/{id}'</span>,
+    [<span class="type">BlogCommentController</span>::<span class="keyword">class</span>, <span class="string">'show'</span>]
+);</code></pre>
+
+        <p><strong>Controller method:</strong></p>
+<pre><code><span class="keyword">class</span> <span class="type">BlogCommentController</span>
+{
+    <span class="comment">/**
+     * Dynamic parameters {slug} and {id}
+     * sont injectes automatically par le router.
+     */</span>
+    <span class="keyword">public function</span> <span class="function">show</span>(<span class="keyword">string</span> <span class="variable">$slug</span>, <span class="keyword">int</span> <span class="variable">$id</span>): <span class="type">array</span>
+    {
+        <span class="variable">$post</span> = <span class="type">Post</span>::<span class="function">query</span>()
+            -><span class="function">where</span>(<span class="string">'slug'</span>, <span class="variable">$slug</span>)
+            -><span class="function">firstOrFail</span>();
+
+        <span class="variable">$comment</span> = <span class="type">Comment</span>::<span class="function">query</span>()
+            -><span class="function">where</span>(<span class="string">'id'</span>, <span class="variable">$id</span>)
+            -><span class="function">where</span>(<span class="string">'post_id'</span>, <span class="variable">$post</span>-><span class="variable">id</span>)
+            -><span class="function">firstOrFail</span>();
+
+        <span class="keyword">return</span> [
+            <span class="string">'post'</span>    => <span class="variable">$post</span>,
+            <span class="string">'comment'</span> => <span class="variable">$comment</span>,
+        ];
+    }
+}</code></pre>
+
+        <div class="callout callout-info">
+          <strong>Parameter order:</strong> Dynamic parameters are injected in the order they appear in the route pattern. <code>{slug}</code> first, <code>{id}</code> second.
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- Exercise 3 -->
+<!-- ════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> Exercice 3 <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <div class="exercise">
+    <div class="exercise-title">Custom Middleware</div>
+
+    <p><strong>Goal:</strong> Create a <code>MaintenanceMiddleware</code> that returns an HTTP 503 (Service Unavailable) response if the <code>MAINTENANCE_MODE</code> environment variable is set to <code>true</code>.</p>
+
+    <div class="callout callout-info">
+      <strong>Reminder:</strong> A middleware intercepts the request before it reaches the controller. It can either let the request through or return a response directly.
+    </div>
+
+    <details>
+      <summary>Solution</summary>
+      <div class="details-body">
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Middleware</span>;
+
+<span class="keyword">class</span> <span class="type">MaintenanceMiddleware</span>
+{
+    <span class="comment">/**
+     * Check if the site is in maintenance mode.
+     * If so, return 503 immediately.
+     * Otherwise, pass the request to the next middleware.
+     */</span>
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="keyword">callable</span> <span class="variable">$next</span>): <span class="keyword">mixed</span>
+    {
+        <span class="keyword">if</span> (<span class="function">env</span>(<span class="string">'MAINTENANCE_MODE'</span>) === <span class="string">'true'</span>) {
+            <span class="function">http_response_code</span>(<span class="number">503</span>);
+            <span class="keyword">return</span> [
+                <span class="string">'error'</span>   => <span class="string">'Service Unavailable'</span>,
+                <span class="string">'message'</span> => <span class="string">'The site is under maintenance. Please come back soon.'</span>,
+            ];
+        }
+
+        <span class="comment">// Not in maintenance: pass to the next middleware</span>
+        <span class="keyword">return</span> <span class="variable">$next</span>();
+    }
+}
+</code></pre>
+
+        <p><strong>Global registration (in index.php):</strong></p>
+<pre><code><span class="variable">$app</span>-><span class="function">router</span>()-><span class="function">addGlobalMiddleware</span>(
+    <span class="type">MaintenanceMiddleware</span>::<span class="keyword">class</span>
+);</code></pre>
+
+        <p><strong>Or on a route group:</strong></p>
+<pre><code><span class="variable">$router</span>-><span class="function">group</span>([<span class="string">'middleware'</span> => [<span class="type">MaintenanceMiddleware</span>::<span class="keyword">class</span>]], <span class="keyword">function</span> (<span class="variable">$r</span>) {
+    <span class="variable">$r</span>-><span class="function">get</span>(<span class="string">'/api/status'</span>, [<span class="type">StatusController</span>::<span class="keyword">class</span>, <span class="string">'index'</span>]);
+});</code></pre>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- Exercise 4 -->
+<!-- ════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Exercice 4 <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <div class="exercise">
+    <div class="exercise-title">ORM Relations</div>
+
+    <p>Given the following tables:</p>
+
+<pre><code><span class="comment">-- categories</span>
+<span class="keyword">CREATE TABLE</span> categories (
+    id    <span class="type">INT</span> <span class="keyword">PRIMARY KEY AUTO_INCREMENT</span>,
+    name  <span class="type">VARCHAR</span>(<span class="number">100</span>) <span class="keyword">NOT NULL</span>
+);
+
+<span class="comment">-- products</span>
+<span class="keyword">CREATE TABLE</span> products (
+    id            <span class="type">INT</span> <span class="keyword">PRIMARY KEY AUTO_INCREMENT</span>,
+    name          <span class="type">VARCHAR</span>(<span class="number">255</span>) <span class="keyword">NOT NULL</span>,
+    category_id   <span class="type">INT</span> <span class="keyword">NOT NULL</span>,
+    price         <span class="type">DECIMAL</span>(<span class="number">10</span>,<span class="number">2</span>) <span class="keyword">NOT NULL</span>,
+    <span class="keyword">FOREIGN KEY</span> (category_id) <span class="keyword">REFERENCES</span> categories(id)
+);</code></pre>
+
+    <p><strong>Goal:</strong> Write both Model classes with their relations, then a query to get all products with their category name where the price is above 100.</p>
+
+    <details>
+      <summary>Solution</summary>
+      <div class="details-body">
+        <p><strong>Category Model:</strong></p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Models</span>;
+
+<span class="keyword">use</span> <span class="type">App\ORM\Model</span>;
+<span class="keyword">use</span> <span class="type">App\ORM\Attributes\HasMany</span>;
+
+<span class="keyword">class</span> <span class="type">Category</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">protected static</span> <span class="keyword">string</span> <span class="variable">$table</span> = <span class="string">'categories'</span>;
+
+    <span class="keyword">public</span> <span class="keyword">int</span> <span class="variable">$id</span>;
+    <span class="keyword">public</span> <span class="keyword">string</span> <span class="variable">$name</span>;
+
+    <span class="comment">/** A category has many products */</span>
+    #[<span class="type">HasMany</span>(<span class="type">Product</span>::<span class="keyword">class</span>, <span class="string">'category_id'</span>)]
+    <span class="keyword">public</span> <span class="keyword">array</span> <span class="variable">$products</span>;
+}</code></pre>
+
+        <p><strong>Product Model:</strong></p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Models</span>;
+
+<span class="keyword">use</span> <span class="type">App\ORM\Model</span>;
+<span class="keyword">use</span> <span class="type">App\ORM\Attributes\BelongsTo</span>;
+
+<span class="keyword">class</span> <span class="type">Product</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">protected static</span> <span class="keyword">string</span> <span class="variable">$table</span> = <span class="string">'products'</span>;
+
+    <span class="keyword">public</span> <span class="keyword">int</span> <span class="variable">$id</span>;
+    <span class="keyword">public</span> <span class="keyword">string</span> <span class="variable">$name</span>;
+    <span class="keyword">public</span> <span class="keyword">int</span> <span class="variable">$category_id</span>;
+    <span class="keyword">public</span> <span class="keyword">float</span> <span class="variable">$price</span>;
+
+    <span class="comment">/** A product belongs to a category */</span>
+    #[<span class="type">BelongsTo</span>(<span class="type">Category</span>::<span class="keyword">class</span>, <span class="string">'category_id'</span>)]
+    <span class="keyword">public</span> ?<span class="type">Category</span> <span class="variable">$category</span>;
+}</code></pre>
+
+        <p><strong>Query with relation:</strong></p>
+<pre><code><span class="comment">// Retrieve products with their category, price > 100</span>
+<span class="variable">$products</span> = <span class="type">Product</span>::<span class="function">query</span>()
+    -><span class="function">with</span>(<span class="string">'category'</span>)
+    -><span class="function">where</span>(<span class="string">'price'</span>, <span class="string">'>'</span>, <span class="number">100</span>)
+    -><span class="function">get</span>();
+
+<span class="comment">// Each product has its category loaded</span>
+<span class="keyword">foreach</span> (<span class="variable">$products</span> <span class="keyword">as</span> <span class="variable">$product</span>) {
+    <span class="function">echo</span> <span class="variable">$product</span>-><span class="variable">name</span> . <span class="string">' — '</span> . <span class="variable">$product</span>-><span class="variable">category</span>-><span class="variable">name</span>;
+}</code></pre>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- Exercise 5 -->
+<!-- ════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">5</span> Exercice 5 <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <div class="exercise">
+    <div class="exercise-title">DTO Validation</div>
+
+    <p><strong>Goal:</strong> Create a <code>RegisterRequest</code> DTO with the following validation rules (via PHP attributes):</p>
+
+    <table>
+      <thead><tr><th>Field</th><th>Rules</th></tr></thead>
+      <tbody>
+        <tr><td><code>email</code></td><td>Required, valid email format</td></tr>
+        <tr><td><code>password</code></td><td>Required, minimum 8 characters</td></tr>
+        <tr><td><code>name</code></td><td>Required, minimum 2 characters, maximum 50</td></tr>
+        <tr><td><code>age</code></td><td>Minimum 18</td></tr>
+      </tbody>
+    </table>
+
+    <details>
+      <summary>Solution</summary>
+      <div class="details-body">
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Dto\Auth</span>;
+
+<span class="keyword">use</span> <span class="type">App\Validation\Attributes\Required</span>;
+<span class="keyword">use</span> <span class="type">App\Validation\Attributes\Email</span>;
+<span class="keyword">use</span> <span class="type">App\Validation\Attributes\Min</span>;
+<span class="keyword">use</span> <span class="type">App\Validation\Attributes\Max</span>;
+
+<span class="keyword">class</span> <span class="type">RegisterRequest</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        #[<span class="type">Required</span>]
+        #[<span class="type">Email</span>]
+        <span class="keyword">public readonly</span> <span class="keyword">string</span> <span class="variable">$email</span>,
+
+        #[<span class="type">Required</span>]
+        #[<span class="type">Min</span>(<span class="number">8</span>)]
+        <span class="keyword">public readonly</span> <span class="keyword">string</span> <span class="variable">$password</span>,
+
+        #[<span class="type">Required</span>]
+        #[<span class="type">Min</span>(<span class="number">2</span>)]
+        #[<span class="type">Max</span>(<span class="number">50</span>)]
+        <span class="keyword">public readonly</span> <span class="keyword">string</span> <span class="variable">$name</span>,
+
+        #[<span class="type">Min</span>(<span class="number">18</span>)]
+        <span class="keyword">public readonly</span> ?<span class="keyword">int</span> <span class="variable">$age</span> = <span class="keyword">null</span>,
+    ) {}
+}</code></pre>
+
+        <p><strong>Usage in the controller:</strong></p>
+<pre><code><span class="keyword">class</span> <span class="type">AuthController</span>
+{
+    <span class="keyword">public function</span> <span class="function">register</span>(<span class="type">RegisterRequest</span> <span class="variable">$request</span>): <span class="type">array</span>
+    {
+        <span class="comment">// Le DTO est automatically valide par le framework.</span>
+        <span class="comment">// If validation fails, a 422 is returned with errors.</span>
+
+        <span class="variable">$user</span> = <span class="type">User</span>::<span class="function">create</span>([
+            <span class="string">'email'</span>    => <span class="variable">$request</span>-><span class="variable">email</span>,
+            <span class="string">'password'</span> => <span class="function">password_hash</span>(<span class="variable">$request</span>-><span class="variable">password</span>, <span class="keyword">PASSWORD_BCRYPT</span>),
+            <span class="string">'name'</span>     => <span class="variable">$request</span>-><span class="variable">name</span>,
+            <span class="string">'age'</span>      => <span class="variable">$request</span>-><span class="variable">age</span>,
+        ]);
+
+        <span class="keyword">return</span> [<span class="string">'user'</span> => <span class="variable">$user</span>, <span class="string">'message'</span> => <span class="string">'Registration successful'</span>];
+    }
+}</code></pre>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- Exercise 6 -->
+<!-- ════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">6</span> Exercice 6 <span class="badge badge-advanced">Advanced</span></h2>
+
+  <div class="exercise">
+    <div class="exercise-title">Event-driven architecture</div>
+
+    <p><strong>Goal:</strong> When a user is created, dispatch an event. Create a listener that sends a welcome email and another that logs the creation. Show the complete flow.</p>
+
+    <details>
+      <summary>Solution</summary>
+      <div class="details-body">
+        <p><strong>1. The event:</strong></p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Events</span>;
+
+<span class="keyword">class</span> <span class="type">UserCreated</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">public readonly</span> <span class="keyword">int</span> <span class="variable">$userId</span>,
+        <span class="keyword">public readonly</span> <span class="keyword">string</span> <span class="variable">$email</span>,
+        <span class="keyword">public readonly</span> <span class="keyword">string</span> <span class="variable">$name</span>,
+    ) {}
+}</code></pre>
+
+        <p><strong>2. Listener — Welcome email:</strong></p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Listeners</span>;
+
+<span class="keyword">use</span> <span class="type">App\Events\UserCreated</span>;
+
+<span class="keyword">class</span> <span class="type">SendWelcomeEmail</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">UserCreated</span> <span class="variable">$event</span>): <span class="keyword">void</span>
+    {
+        <span class="comment">// Send the email via a mail service</span>
+        <span class="function">mail</span>(
+            <span class="variable">$event</span>-><span class="variable">email</span>,
+            <span class="string">'Welcome '</span> . <span class="variable">$event</span>-><span class="variable">name</span>,
+            <span class="string">'Thank you for registering on our platform!'</span>
+        );
+    }
+}</code></pre>
+
+        <p><strong>3. Listener — Logging:</strong></p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Listeners</span>;
+
+<span class="keyword">use</span> <span class="type">App\Events\UserCreated</span>;
+
+<span class="keyword">class</span> <span class="type">LogUserCreation</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">UserCreated</span> <span class="variable">$event</span>): <span class="keyword">void</span>
+    {
+        <span class="function">error_log</span>(<span class="function">sprintf</span>(
+            <span class="string">'[%s] Nouvel utilisateur cree : #%d (%s)'</span>,
+            <span class="function">date</span>(<span class="string">'Y-m-d H:i:s'</span>),
+            <span class="variable">$event</span>-><span class="variable">userId</span>,
+            <span class="variable">$event</span>-><span class="variable">email</span>,
+        ));
+    }
+}</code></pre>
+
+        <p><strong>4. Listener registration (at boot):</strong></p>
+<pre><code><span class="comment">// app/Listeners/ — automatic discovery, or:</span>
+<span class="variable">$dispatcher</span> = <span class="variable">$app</span>-><span class="function">container</span>()-><span class="function">get</span>(<span class="type">EventDispatcher</span>::<span class="keyword">class</span>);
+<span class="variable">$dispatcher</span>-><span class="function">listen</span>(<span class="type">UserCreated</span>::<span class="keyword">class</span>, <span class="type">SendWelcomeEmail</span>::<span class="keyword">class</span>);
+<span class="variable">$dispatcher</span>-><span class="function">listen</span>(<span class="type">UserCreated</span>::<span class="keyword">class</span>, <span class="type">LogUserCreation</span>::<span class="keyword">class</span>);</code></pre>
+
+        <p><strong>5. Dispatch from the controller:</strong></p>
+<pre><code><span class="keyword">class</span> <span class="type">AuthController</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">private</span> <span class="type">EventDispatcher</span> <span class="variable">$events</span>,
+    ) {}
+
+    <span class="keyword">public function</span> <span class="function">register</span>(<span class="type">RegisterRequest</span> <span class="variable">$request</span>): <span class="type">array</span>
+    {
+        <span class="variable">$user</span> = <span class="type">User</span>::<span class="function">create</span>([...]);
+
+        <span class="comment">// Dispatch the event — both listeners fire</span>
+        <span class="variable">$this</span>-><span class="variable">events</span>-><span class="function">dispatch</span>(<span class="keyword">new</span> <span class="type">UserCreated</span>(
+            <span class="variable">userId</span>: <span class="variable">$user</span>-><span class="variable">id</span>,
+            <span class="variable">email</span>:  <span class="variable">$user</span>-><span class="variable">email</span>,
+            <span class="variable">name</span>:   <span class="variable">$user</span>-><span class="variable">name</span>,
+        ));
+
+        <span class="keyword">return</span> [<span class="string">'user'</span> => <span class="variable">$user</span>];
+    }
+}</code></pre>
+
+        <div class="callout callout-danger">
+          <strong>Worker reminder:</strong> Never call <code>$dispatcher->listen()</code> in a controller! Listeners are registered at boot only, otherwise they accumulate on each request.
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- Exercise 7 -->
+<!-- ════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">7</span> Exercice 7 <span class="badge badge-advanced">Advanced</span></h2>
+
+  <div class="exercise">
+    <div class="exercise-title">Multi-database query</div>
+
+    <p><strong>Objectif :</strong> Interrogez la base <code>job</code> pour les factures, en faisant une jointure avec les utilisateurs de la base by default. Montrez comment gerer les requetes cross-database.</p>
+
+    <details>
+      <summary>Solution</summary>
+      <div class="details-body">
+        <p><strong>Connection configuration (.env):</strong></p>
+<pre><code><span class="comment"># Base by default</span>
+<span class="variable">DB_DATABASE</span>=<span class="string">app_main</span>
+
+<span class="comment"># Secondary "job" database</span>
+<span class="variable">DB_JOB_HOST</span>=<span class="string">127.0.0.1</span>
+<span class="variable">DB_JOB_DATABASE</span>=<span class="string">app_job</span>
+<span class="variable">DB_JOB_USERNAME</span>=<span class="string">root</span>
+<span class="variable">DB_JOB_PASSWORD</span>=<span class="string">secret</span></code></pre>
+
+        <p><strong>Invoice Model on the "job" connection:</strong></p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Models</span>;
+
+<span class="keyword">use</span> <span class="type">App\ORM\Model</span>;
+
+<span class="keyword">class</span> <span class="type">Invoice</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">protected static</span> <span class="keyword">string</span> <span class="variable">$connection</span> = <span class="string">'job'</span>;
+    <span class="keyword">protected static</span> <span class="keyword">string</span> <span class="variable">$table</span>      = <span class="string">'invoices'</span>;
+
+    <span class="keyword">public</span> <span class="keyword">int</span> <span class="variable">$id</span>;
+    <span class="keyword">public</span> <span class="keyword">int</span> <span class="variable">$user_id</span>;
+    <span class="keyword">public</span> <span class="keyword">float</span> <span class="variable">$amount</span>;
+    <span class="keyword">public</span> <span class="keyword">string</span> <span class="variable">$status</span>;
+}</code></pre>
+
+        <p><strong>Cross-database query with raw SQL join:</strong></p>
+<pre><code><span class="keyword">use</span> <span class="type">App\ORM\Database</span>;
+
+<span class="comment">// We use the "job" connection for the main query</span>
+<span class="variable">$pdo</span> = <span class="type">Database</span>::<span class="function">connection</span>(<span class="string">'job'</span>);
+
+<span class="variable">$sql</span> = <span class="string">'
+    SELECT
+        i.id          AS invoice_id,
+        i.amount,
+        i.status,
+        u.name        AS user_name,
+        u.email       AS user_email
+    FROM app_job.invoices i
+    INNER JOIN app_main.users u ON u.id = i.user_id
+    WHERE i.status = :status
+    ORDER BY i.amount DESC
+'</span>;
+
+<span class="variable">$stmt</span> = <span class="variable">$pdo</span>-><span class="function">prepare</span>(<span class="variable">$sql</span>);
+<span class="variable">$stmt</span>-><span class="function">execute</span>([<span class="string">'status'</span> => <span class="string">'pending'</span>]);
+<span class="variable">$results</span> = <span class="variable">$stmt</span>-><span class="function">fetchAll</span>();</code></pre>
+
+        <div class="callout callout-info">
+          <strong>Cross-database:</strong> MySQL allows cross-database joins if the user has permissions on both. Prefix tables with the database name: <code>app_job.invoices</code>, <code>app_main.users</code>.
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- Exercise 8 -->
+<!-- ════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">8</span> Exercice 8 <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <div class="exercise">
+    <div class="exercise-title">Complete API</div>
+
+    <p><strong>Goal:</strong> Design the architecture of a mini blog API with the following constraints:</p>
+
+    <ul>
+      <li>Models: <code>Post</code>, <code>Comment</code>, <code>User</code></li>
+      <li>Routes: Full CRUD for posts, comments nested under posts</li>
+      <li>Auth: only the author of a post can edit or delete it</li>
+    </ul>
+
+    <p><em>Architecture only, no full code.</em></p>
+
+    <details>
+      <summary>Solution</summary>
+      <div class="details-body">
+        <p><strong>Models and relations:</strong></p>
+<pre><code><span class="comment">// User -> hasMany(Post), hasMany(Comment)</span>
+<span class="comment">// Post -> belongsTo(User), hasMany(Comment)</span>
+<span class="comment">// Comment -> belongsTo(User), belongsTo(Post)</span>
+
+<span class="type">User</span>     { id, name, email, password }
+<span class="type">Post</span>     { id, user_id, title, slug, body, created_at }
+<span class="type">Comment</span>  { id, user_id, post_id, body, created_at }</code></pre>
+
+        <p><strong>Routes:</strong></p>
+<pre><code><span class="comment">// ── Auth ──</span>
+POST   <span class="string">/api/register</span>                          <span class="comment">→ AuthController@register</span>
+POST   <span class="string">/api/login</span>                             <span class="comment">→ AuthController@login</span>
+
+<span class="comment">// ── Posts (CRUD) ──</span>
+GET    <span class="string">/api/posts</span>                             <span class="comment">→ PostController@index</span>
+GET    <span class="string">/api/posts/{id}</span>                        <span class="comment">→ PostController@show</span>
+POST   <span class="string">/api/posts</span>            [auth]           <span class="comment">→ PostController@store</span>
+PUT    <span class="string">/api/posts/{id}</span>       [auth, owner]    <span class="comment">→ PostController@update</span>
+DELETE <span class="string">/api/posts/{id}</span>       [auth, owner]    <span class="comment">→ PostController@delete</span>
+
+<span class="comment">// ── Comments (imbriques) ──</span>
+GET    <span class="string">/api/posts/{postId}/comments</span>           <span class="comment">→ CommentController@index</span>
+POST   <span class="string">/api/posts/{postId}/comments</span>  [auth]   <span class="comment">→ CommentController@store</span>
+DELETE <span class="string">/api/comments/{id}</span>            [auth, owner]  <span class="comment">→ CommentController@delete</span></code></pre>
+
+        <p><strong>Authorization middleware (owner):</strong></p>
+<pre><code><span class="comment">// OwnerMiddleware verifies that the connected user
+// is indeed the author of the resource before allowing
+// modification or deletion.</span>
+
+<span class="keyword">class</span> <span class="type">OwnerMiddleware</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="keyword">callable</span> <span class="variable">$next</span>): <span class="keyword">mixed</span>
+    {
+        <span class="variable">$post</span> = <span class="type">Post</span>::<span class="function">findOrFail</span>(<span class="variable">$id</span>);
+
+        <span class="keyword">if</span> (<span class="variable">$post</span>-><span class="variable">user_id</span> !== <span class="variable">$authUser</span>-><span class="variable">id</span>) {
+            <span class="keyword">throw new</span> <span class="type">HttpException</span>(<span class="number">403</span>, <span class="string">'Forbidden'</span>);
+        }
+
+        <span class="keyword">return</span> <span class="variable">$next</span>();
+    }
+}</code></pre>
+
+        <p><strong>File architecture:</strong></p>
+<pre><code>app/
+  Models/
+    User.php
+    Post.php
+    Comment.php
+  Controllers/
+    AuthController.php
+    PostController.php
+    CommentController.php
+  DTOs/
+    RegisterRequest.php
+    LoginRequest.php
+    PostRequest.php
+    CommentRequest.php
+  Middleware/
+    AuthMiddleware.php
+    OwnerMiddleware.php
+routes/
+    auth.php
+    posts.php
+    comments.php</code></pre>
+      </div>
+    </details>
+  </div>
+</section>
+
+<div class="pagination">
+  <a href="07-auth-di-events.html" class="prev">Auth, DI &amp; Events</a>
+  <a href="09-profiler-security.html" class="next">Profiler &amp; Security</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

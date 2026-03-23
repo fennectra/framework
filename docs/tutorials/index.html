@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tutorials — Fennec PHP Framework</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Fennec PHP Framework</h1>
+  <p>Guides, best practices and exercises</p>
+  <div class="hero-sub">15 tutorials &middot; From beginner to advanced &middot; With corrected exercises</div>
+</div>
+
+<div class="container">
+
+<!-- ═══ Worker Mode ═══ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">I</span> Worker Mode &mdash; FrankenPHP</h2>
+  <p>PHP in persistent mode: the application stays in memory between requests. A paradigm shift that requires new habits.</p>
+
+  <div class="card-grid">
+    <a href="01-lifecycle.html" class="card">
+      <div class="card-number">Tutorial 01 &middot; Beginner</div>
+      <h3>Lifecycle &amp; Golden Rules</h3>
+      <p>The worker lifecycle, what persists vs. what is reset, and the 5 rules you must never break.</p>
+    </a>
+    <a href="02-patterns.html" class="card">
+      <div class="card-number">Tutorial 02 &middot; Intermediate</div>
+      <h3>Patterns &amp; Architecture</h3>
+      <p>Singleton vs instance, stateless services, DI Container in worker mode, and how to write safe code.</p>
+    </a>
+    <a href="03-memory.html" class="card">
+      <div class="card-number">Tutorial 03 &middot; Intermediate</div>
+      <h3>Memory &amp; Monitoring</h3>
+      <p>Detecting leaks, reading metrics, configuring MAX_REQUESTS, Logger and /debug/worker endpoint.</p>
+    </a>
+    <a href="04-exercises.html" class="card">
+      <div class="card-number">Tutorial 04 &middot; All levels</div>
+      <h3>Exercises &mdash; Worker</h3>
+      <p>6 exercises: find bugs, fix leaks, secure middleware. Detailed solutions.</p>
+    </a>
+  </div>
+</section>
+
+<!-- ═══ Framework ═══ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">II</span> The Framework &mdash; Features</h2>
+  <p>Routing, ORM, authentication, dependency injection, events. Everything you need to build an API.</p>
+
+  <div class="card-grid">
+    <a href="05-routing.html" class="card">
+      <div class="card-number">Tutorial 05 &middot; Beginner</div>
+      <h3>Routing &amp; Middleware</h3>
+      <p>Define routes, groups with prefix, middleware pipeline, Request object, JSON responses and auto OpenAPI.</p>
+    </a>
+    <a href="06-orm.html" class="card">
+      <div class="card-number">Tutorial 06 &middot; Intermediate</div>
+      <h3>ORM &amp; Query Builder</h3>
+      <p>Models with relations, fluent CRUD, Query Builder, soft delete, multi-database, DTOs and validation.</p>
+    </a>
+    <a href="07-auth-di-events.html" class="card">
+      <div class="card-number">Tutorial 07 &middot; Intermediate</div>
+      <h3>Auth, DI &amp; Events</h3>
+      <p>JWT and RBAC, injection Container, Event Dispatcher with sync/redis/database brokers.</p>
+    </a>
+    <a href="08-exercises-framework.html" class="card">
+      <div class="card-number">Tutorial 08 &middot; All levels</div>
+      <h3>Exercises &mdash; Framework</h3>
+      <p>8 exercises: CRUD, custom middleware, ORM relations, DTO validation, events, complete API.</p>
+    </a>
+  </div>
+</section>
+
+<!-- ═══ Advanced Features ═══ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">III</span> Advanced Features &mdash; Production</h2>
+  <p>Profiler, security, migrations, scheduler, queue, feature flags, notifications, OAuth and more. Everything you need for production.</p>
+
+  <div class="card-grid">
+    <a href="09-profiler-security.html" class="card">
+      <div class="card-number">Tutorial 09 &middot; Intermediate</div>
+      <h3>Profiler, Rate Limiting &amp; Security</h3>
+      <p>Debug profiler per-request, N+1 detection, Redis rate limiting, security headers and request logging.</p>
+    </a>
+    <a href="10-migrations-cache.html" class="card">
+      <div class="card-number">Tutorial 10 &middot; Beginner &ndash; Intermediate</div>
+      <h3>Migrations, Seeding &amp; Cache</h3>
+      <p>Eager loading with(), versioned SQL migrations, seeders with FakeData, Redis cache and docker-compose.</p>
+    </a>
+    <a href="11-scheduler-queue.html" class="card">
+      <div class="card-number">Tutorial 11 &middot; Intermediate</div>
+      <h3>Scheduler, Queue &amp; Feature Flags</h3>
+      <p>Scheduled tasks with K8s-safe Redis Lock, async job queue, feature flags and state machine.</p>
+    </a>
+    <a href="12-notifications-oauth.html" class="card">
+      <div class="card-number">Tutorial 12 &middot; Intermediate &ndash; Advanced</div>
+      <h3>Notifications, SSE &amp; OAuth</h3>
+      <p>Multi-channel notifications (mail, Slack, DB), real-time SSE broadcasting, Google/GitHub OAuth and deploy CLI.</p>
+    </a>
+  </div>
+</section>
+
+<!-- ═══ Performance & Production ═══ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">IV</span> Performance &amp; Production</h2>
+  <p>Optimizations, lazy loading, webhooks, storage, encryption and compliance. Everything for production.</p>
+
+  <div class="card-grid">
+    <a href="13-performance.html" class="card">
+      <div class="card-number">Tutorial 13 &middot; Intermediate</div>
+      <h3>Performance &amp; Lazy Loading</h3>
+      <p>Lazy-init services, Reflection LRU cache, PostgreSQL CTE, optimized middleware pipeline.</p>
+    </a>
+    <a href="14-webhooks-storage.html" class="card">
+      <div class="card-number">Tutorial 14 &middot; Intermediate</div>
+      <h3>Webhooks, Storage &amp; Images</h3>
+      <p>Outbound HMAC-SHA256 webhooks, auto retry, multi-driver S3/GCS Storage, image transformations.</p>
+    </a>
+    <a href="15-compliance.html" class="card">
+      <div class="card-number">Tutorial 15 &middot; Advanced</div>
+      <h3>Compliance &amp; Security</h3>
+      <p>SOC 2 audit trail, NF525 fiscal compliance, AES-256-GCM encryption, GDPR and multi-tenancy.</p>
+    </a>
+  </div>
+</section>
+
+<!-- ═══ Quick Reference ═══ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">V</span> Quick Reference</h2>
+
+  <details>
+    <summary>Essential CLI Commands</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Dev server</span>
+./forge serve                        <span class="comment"># PHP built-in</span>
+./forge serve --frankenphp --worker  <span class="comment"># FrankenPHP worker (max perf)</span>
+
+<span class="comment"># CRUD generation</span>
+./forge make:all Product --roles=admin,manager
+./forge make:all Invoice --connection=job
+
+<span class="comment"># Migrations & Seeding</span>
+./forge migrate                        <span class="comment"># apply migrations</span>
+./forge migrate --rollback             <span class="comment"># rollback the last batch</span>
+./forge make:migration create_products <span class="comment"># create a migration</span>
+./forge db:seed                        <span class="comment"># run the seeders</span>
+
+<span class="comment"># Queue & Scheduler</span>
+./forge queue:work                     <span class="comment"># consume jobs</span>
+./forge queue:retry --id=5             <span class="comment"># re-execute a job</span>
+./forge schedule:run                   <span class="comment"># scheduled tasks</span>
+
+<span class="comment"># Feature Flags & Deploy</span>
+./forge feature list                   <span class="comment"># list flags</span>
+./forge feature enable dark-mode       <span class="comment"># enable a flag</span>
+./forge deploy                         <span class="comment"># build + push + K8s</span>
+
+<span class="comment"># Quality</span>
+./forge quality        <span class="comment"># lint + PHPStan + tests</span>
+./forge quality --fix  <span class="comment"># auto-fix style</span></code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Project Structure</summary>
+    <div class="details-body">
+<pre><code>src/                    <span class="comment">&larr; Framework core</span>
+  Attributes/           <span class="comment">&larr; Validation, ORM, RateLimit, StateMachine, Broadcast</span>
+  Commands/             <span class="comment">&larr; CLI (serve, make:*, migrate, queue, schedule, deploy)</span>
+  Core/                 <span class="comment">&larr; App, Router, Container, ORM, Events, JWT</span>
+    Profiler/           <span class="comment">&larr; Debug profiler per-request</span>
+    Relations/          <span class="comment">&larr; Eager loading (BelongsTo, HasMany, HasOne)</span>
+    Cache/              <span class="comment">&larr; RedisCache, TaggedCache</span>
+    Scheduler/          <span class="comment">&larr; Cron + K8s-safe Redis Lock</span>
+    Queue/              <span class="comment">&larr; Job dispatch + worker</span>
+    Feature/            <span class="comment">&larr; Feature flags</span>
+    Notification/       <span class="comment">&larr; Mail, Slack, Database</span>
+    Broadcasting/       <span class="comment">&larr; SSE via Redis Pub/Sub</span>
+    OAuth/              <span class="comment">&larr; Google, GitHub</span>
+  Middleware/           <span class="comment">&larr; Auth, CORS, Profiler, RateLimit, Security, Logging</span>
+
+app/                    <span class="comment">&larr; Application code</span>
+  Controllers/          <span class="comment">&larr; HTTP handlers</span>
+  Models/               <span class="comment">&larr; ORM models</span>
+  Dto/&lt;Domain&gt;/         <span class="comment">&larr; DTOs organized by domain</span>
+  Routes/               <span class="comment">&larr; Route files (auto-loaded)</span>
+  Jobs/                 <span class="comment">&larr; Job classes for the queue</span>
+  Schedule.php          <span class="comment">&larr; Scheduled tasks</span>
+
+database/               <span class="comment">&larr; Schema and data</span>
+  migrations/           <span class="comment">&larr; Migration files</span>
+  seeders/              <span class="comment">&larr; Seeders</span>
+
+docker-compose.yml      <span class="comment">&larr; Local dev (API + PostgreSQL + Redis)</span></code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>HTTP Architecture</summary>
+    <div class="details-body">
+      <div class="diagram">
+  HTTP Request
+      │
+      ▼
+  index.php ──► App::run() or App::runWorker()
+      │
+      ▼
+  Router::dispatch()
+      │
+      ▼
+  MiddlewarePipeline
+      │
+      ├── CorsMiddleware           (CORS headers)
+      ├── ProfilerMiddleware       (per-request debug)
+      ├── RequestLoggingMiddleware (logs + request_id)
+      ├── SecurityHeadersMiddleware(security headers)
+      ├── RateLimitMiddleware      (429 if exceeded)
+      ├── AuthMiddleware           (JWT + RBAC)
+      │
+      ▼
+  Controller::method()
+      │
+      ├── Model / DB         (ORM + eager loading)
+      ├── Validator / DTO    (validation)
+      ├── Event::dispatch()  (events + notifications)
+      ├── Job::dispatch()    (async queue)
+      ├── FeatureFlag::enabled() (rollout)
+      │
+      ▼
+  JSON Response
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══ Prerequisites ═══ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">VI</span> Prerequisites</h2>
+
+  <table>
+    <thead><tr><th>Tool</th><th>Version</th><th>Usage</th></tr></thead>
+    <tbody>
+      <tr><td>PHP</td><td>8.3+</td><td>Runtime</td></tr>
+      <tr><td>Composer</td><td>2.x</td><td>Dependencies</td></tr>
+      <tr><td>PostgreSQL</td><td>14+</td><td>Database</td></tr>
+      <tr><td>Redis</td><td>7+</td><td>Cache, rate limit, scheduler, queue (optional in dev)</td></tr>
+      <tr><td>Docker</td><td>20+</td><td>docker compose up -d (PostgreSQL + Redis + API)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <strong>Quick start</strong>
+    <code>composer install && cp .env.example .env && ./forge serve</code> — that's it.
+  </div>
+</section>
+
+</div>
+
+<div class="footer">
+  Fennec PHP Framework &mdash; Tutorials &copy; 2026
+</div>
+
+</body>
+</html>

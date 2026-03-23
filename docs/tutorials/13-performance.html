@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>13 — Performance & Lazy Loading</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Performance &amp; Lazy Loading</h1>
+  <p>Optimizing every millisecond in worker mode</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 13 &mdash; Performance &amp; Lazy Loading</div>
+
+<nav class="nav">
+  <a href="01-lifecycle.html">01</a>
+  <a href="02-patterns.html">02</a>
+  <a href="03-memory.html">03</a>
+  <a href="04-exercises.html">04</a>
+  <a href="05-routing.html">05</a>
+  <a href="06-orm.html">06</a>
+  <a href="07-auth-di-events.html">07</a>
+  <a href="08-exercises-framework.html">08</a>
+  <a href="09-profiler-security.html">09</a>
+  <a href="10-migrations-cache.html">10</a>
+  <a href="11-scheduler-queue.html">11</a>
+  <a href="12-notifications-oauth.html">12</a>
+  <a href="13-performance.html" class="active">13</a>
+  <a href="14-webhooks-storage.html">14</a>
+  <a href="15-compliance.html">15</a>
+</nav>
+
+<!-- ═══════════════════════════════════════════
+     1. Lazy Initialization
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Lazy Initialization in App.php <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>In FrankenPHP worker mode, the application stays in memory between requests. Initializing all services at boot is wasteful: many are never used for a given request. The lazy-init pattern defers service creation to the first access.</p>
+
+  <details open>
+    <summary>Eager vs Lazy &mdash; Comparison</summary>
+    <div class="details-body">
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">Eager (before)</div>
+<pre><code><span class="keyword">class</span> <span class="type">App</span>
+{
+    <span class="keyword">public function</span> <span class="function">boot</span>(): <span class="keyword">void</span>
+    {
+        <span class="comment">// All services created at boot</span>
+        <span class="variable">$this</span>-><span class="variable">mailer</span> = <span class="keyword">new</span> <span class="type">Mailer</span>(<span class="variable">$config</span>);
+        <span class="variable">$this</span>-><span class="variable">cache</span> = <span class="keyword">new</span> <span class="type">RedisCache</span>();
+        <span class="variable">$this</span>-><span class="variable">storage</span> = <span class="keyword">new</span> <span class="type">S3Storage</span>();
+        <span class="variable">$this</span>-><span class="variable">broadcaster</span> = <span class="keyword">new</span> <span class="type">Broadcaster</span>();
+        <span class="comment">// 4 connections open even if unused</span>
+    }
+}</code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">Lazy (after)</div>
+<pre><code><span class="keyword">class</span> <span class="type">App</span>
+{
+    <span class="keyword">public function</span> <span class="function">mailer</span>(): <span class="type">Mailer</span>
+    {
+        <span class="comment">// Created only on first call</span>
+        <span class="keyword">return</span> <span class="variable">$this</span>-><span class="variable">mailer</span>
+            ??= <span class="keyword">new</span> <span class="type">Mailer</span>(<span class="variable">$config</span>);
+    }
+
+    <span class="keyword">public function</span> <span class="function">cache</span>(): <span class="type">Cache</span>
+    {
+        <span class="keyword">return</span> <span class="variable">$this</span>-><span class="variable">cache</span>
+            ??= <span class="keyword">new</span> <span class="type">RedisCache</span>();
+    }
+}</code></pre>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <strong>??= operator (null coalescing assignment).</strong>
+        PHP 8.3+ allows writing <code>$this->service ??= new Service()</code>. The service is instantiated only once, then reused for all subsequent worker requests.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Measured impact</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Metric</th><th>Eager boot</th><th>Lazy init</th><th>Gain</th></tr></thead>
+        <tbody>
+          <tr><td>Boot time</td><td>~12ms</td><td>~2ms</td><td>-83%</td></tr>
+          <tr><td>Initial memory</td><td>~8 MB</td><td>~3 MB</td><td>-62%</td></tr>
+          <tr><td>Open connections</td><td>4</td><td>0-2 depending on the route</td><td>Variable</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     2. Reflection Caching
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Reflection Cache in the Router <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The Router uses PHP Reflection to read controller attributes (<code>#[RateLimit]</code>, <code>#[FileUpload]</code>, etc.). In worker mode, this information is constant between requests. A bounded LRU cache avoids recomputing them.</p>
+
+  <details open>
+    <summary>How the LRU cache works</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">class</span> <span class="type">Router</span>
+{
+    <span class="comment">// Cache bounded to 200 entries (LRU eviction)</span>
+    <span class="keyword">private static array</span> <span class="variable">$reflectionCache</span> = [];
+    <span class="keyword">private const int</span> <span class="variable">MAX_CACHE_SIZE</span> = <span class="number">200</span>;
+
+    <span class="keyword">private function</span> <span class="function">getMethodAttributes</span>(<span class="type">string</span> <span class="variable">$controller</span>, <span class="type">string</span> <span class="variable">$method</span>): <span class="type">array</span>
+    {
+        <span class="variable">$key</span> = <span class="variable">$controller</span> . <span class="string">'::'</span> . <span class="variable">$method</span>;
+
+        <span class="keyword">if</span> (<span class="function">isset</span>(<span class="keyword">self</span>::<span class="variable">$reflectionCache</span>[<span class="variable">$key</span>])) {
+            <span class="comment">// Cache hit: move to front (LRU)</span>
+            <span class="variable">$value</span> = <span class="keyword">self</span>::<span class="variable">$reflectionCache</span>[<span class="variable">$key</span>];
+            <span class="keyword">unset</span>(<span class="keyword">self</span>::<span class="variable">$reflectionCache</span>[<span class="variable">$key</span>]);
+            <span class="keyword">self</span>::<span class="variable">$reflectionCache</span>[<span class="variable">$key</span>] = <span class="variable">$value</span>;
+            <span class="keyword">return</span> <span class="variable">$value</span>;
+        }
+
+        <span class="comment">// Cache miss: Reflection + storage</span>
+        <span class="variable">$ref</span> = <span class="keyword">new</span> <span class="type">ReflectionMethod</span>(<span class="variable">$controller</span>, <span class="variable">$method</span>);
+        <span class="variable">$attrs</span> = <span class="variable">$ref</span>-><span class="function">getAttributes</span>();
+
+        <span class="comment">// LRU eviction if cache is full</span>
+        <span class="keyword">if</span> (<span class="function">count</span>(<span class="keyword">self</span>::<span class="variable">$reflectionCache</span>) >= <span class="keyword">self</span>::<span class="variable">MAX_CACHE_SIZE</span>) {
+            <span class="function">array_shift</span>(<span class="keyword">self</span>::<span class="variable">$reflectionCache</span>);
+        }
+
+        <span class="keyword">self</span>::<span class="variable">$reflectionCache</span>[<span class="variable">$key</span>] = <span class="variable">$attrs</span>;
+        <span class="keyword">return</span> <span class="variable">$attrs</span>;
+    }
+}</code></pre>
+      <div class="callout callout-warning">
+        <strong>Mandatory bound in worker mode.</strong>
+        Without a limit, the cache would grow indefinitely. LRU with <code>MAX_CACHE_SIZE</code> guarantees constant memory consumption. After the initial warm-up, the hit rate reaches ~99%.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     3. CTE PostgreSQL
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> CTE PostgreSQL <span class="badge badge-advanced">Advanced</span></h2>
+
+  <p>Common Table Expressions (CTE) combine multiple queries into one, reducing network round-trips with the database. The framework uses them for dashboards and statistics.</p>
+
+  <details open>
+    <summary>Example: NF525 statistics</summary>
+    <div class="details-body">
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">Without CTE (3 queries)</div>
+<pre><code><span class="variable">$invoices</span> = <span class="type">DB</span>::<span class="function">query</span>(
+    <span class="string">'SELECT COUNT(*) FROM invoices'</span>
+);
+<span class="variable">$closings</span> = <span class="type">DB</span>::<span class="function">query</span>(
+    <span class="string">'SELECT COUNT(*) FROM nf525_closings'</span>
+);
+<span class="variable">$total</span> = <span class="type">DB</span>::<span class="function">query</span>(
+    <span class="string">'SELECT SUM(total_ht) FROM invoices'</span>
+);</code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">With CTE (1 query)</div>
+<pre><code><span class="variable">$stats</span> = <span class="type">DB</span>::<span class="function">query</span>(<span class="string">'
+  WITH inv AS (
+    SELECT COUNT(*) as cnt,
+           SUM(total_ht) as total
+    FROM invoices
+  ),
+  cls AS (
+    SELECT COUNT(*) as cnt
+    FROM nf525_closings
+  )
+  SELECT inv.cnt, inv.total,
+         cls.cnt as closings
+  FROM inv, cls
+'</span>);</code></pre>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <strong>Network round-trips.</strong>
+        Each SQL query involves a network round-trip (~0.5ms locally, ~2-5ms in cloud). Combining 3 queries into 1 CTE saves 2 round-trips, i.e., 1-10ms per call.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     4. Middleware Pipeline
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Optimized Middleware Pipeline <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>Les middlewares stateless (sans etat entre les requetes) peuvent etre caches pour eviter de les reinstancier a chaque requete. Le pipeline detecte automatically les middlewares reutilisables.</p>
+
+  <details open>
+    <summary>Stateless middleware caching</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">class</span> <span class="type">MiddlewarePipeline</span>
+{
+    <span class="keyword">private static array</span> <span class="variable">$instances</span> = [];
+
+    <span class="keyword">private function</span> <span class="function">resolve</span>(<span class="type">string</span> <span class="variable">$class</span>): <span class="type">object</span>
+    {
+        <span class="comment">// Reuse stateless instances between requests</span>
+        <span class="keyword">return</span> <span class="keyword">self</span>::<span class="variable">$instances</span>[<span class="variable">$class</span>]
+            ??= <span class="keyword">new</span> <span class="variable">$class</span>();
+    }
+}</code></pre>
+      <p>Middlewares caches automatically :</p>
+      <table>
+        <thead><tr><th>Middleware</th><th>Stateless</th><th>Cache</th></tr></thead>
+        <tbody>
+          <tr><td><code>SecurityHeadersMiddleware</code></td><td>Yes</td><td>Yes</td></tr>
+          <tr><td><code>CorsMiddleware</code></td><td>Yes</td><td>Yes</td></tr>
+          <tr><td><code>RequestLoggingMiddleware</code></td><td>Yes</td><td>Yes</td></tr>
+          <tr><td><code>RateLimitMiddleware</code></td><td>Non (parametres per route)</td><td>Non</td></tr>
+          <tr><td><code>AuthMiddleware</code></td><td>Non (roles per route)</td><td>Non</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     5. RouteCache
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">5</span> RouteCache &mdash; Static Loading <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The <code>cache:routes</code> command pre-compiles all routes into a serialized PHP file. In worker mode, this file is loaded once at boot and reused for all requests.</p>
+
+  <details open>
+    <summary>Usage</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Pre-compile the route cache</span>
+<span class="keyword">./forge</span> <span class="function">cache:routes</span>
+
+<span class="comment"># Result: var/cache/routes.php</span>
+<span class="comment"># Contains all serialized routes (compiled regex, middleware, handlers)</span></code></pre>
+      <div class="diagram">
+<pre>
+Without cache:
+  Requete ──► Load app/Routes/*.php ──► Compile regex ──► Dispatch
+                    ~3ms per request
+
+With cache:
+  Boot worker ──► Load routes.php (once only)
+  Requete     ──► Direct dispatch
+                    ~0.1ms per request
+</pre>
+      </div>
+      <div class="callout callout-success">
+        <strong>En mode worker, ces optimisations s'accumulent sur des milliers de requetes.</strong>
+        Un worker qui traite 10 000 requetes economise 30 secondes de compilation de routes et des centaines de milliers d'appels Reflection. Le gain reel in production est significatif.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     Pagination
+     ═══════════════════════════════════════════ -->
+
+<div class="pagination">
+  <a href="12-notifications-oauth.html" class="prev">Notifications, SSE &amp; OAuth</a>
+  <a href="14-webhooks-storage.html" class="next">Webhooks, Storage &amp; Images</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>
