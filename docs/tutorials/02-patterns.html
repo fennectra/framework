@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 — Patterns & Architecture</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Patterns &amp; Architecture</h1>
+  <p>Writing worker-safe code: singletons, controllers, models and middleware</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 02 &mdash; Patterns</div>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Singleton vs Instance <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>In a worker, singletons live forever. This is a strength (reused connections, config loaded once) but also a risk (leaking state). The rule: <strong>singleton for stateless services, fresh instance for anything carrying request-scoped state</strong>.</p>
+
+  <details open>
+    <summary>Framework services table</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Service</th><th>Registration</th><th>Persists?</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td><code>DatabaseManager</code></td><td><code>singleton()</code></td><td><span class="badge badge-safe">YES</span></td><td>Manages the PDO connection pool, cleanup via <code>flush()</code></td></tr>
+          <tr><td><code>JwtService</code></td><td><code>singleton()</code></td><td><span class="badge badge-safe">YES</span></td><td>Stateless: encode/decode with a fixed key</td></tr>
+          <tr><td><code>EventDispatcher</code></td><td><code>singleton()</code></td><td><span class="badge badge-safe">YES</span></td><td>Listeners loaded at boot, never modified</td></tr>
+          <tr><td><code>WorkerStats</code></td><td><code>instance()</code></td><td><span class="badge badge-safe">YES</span></td><td>Object created before the loop, injected as-is</td></tr>
+          <tr><td><code>Logger</code></td><td><code>singleton()</code></td><td><span class="badge badge-safe">YES</span></td><td>Stateless: writes to a file/stream</td></tr>
+          <tr><td>Controllers</td><td><code>bind()</code> implicit</td><td><span class="badge badge-critical">NO</span></td><td>New instance on each request via autowiring</td></tr>
+          <tr><td>Models</td><td>Not registered</td><td><span class="badge badge-critical">NO</span></td><td>Created on demand, never cached</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary>singleton() vs bind() vs instance()</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// singleton() — created ONCE, reused forever</span>
+<span class="variable">$container</span>-><span class="function">singleton</span>(<span class="type">JwtService</span>::<span class="keyword">class</span>, <span class="keyword">function</span> (<span class="variable">$c</span>) {
+    <span class="keyword">return new</span> <span class="type">JwtService</span>(<span class="variable">$c</span>-><span class="function">get</span>(<span class="string">'config'</span>)[<span class="string">'jwt_secret'</span>]);
+});
+
+<span class="comment">// bind() — new instance on EVERY get()/make()</span>
+<span class="variable">$container</span>-><span class="function">bind</span>(<span class="type">QueryBuilder</span>::<span class="keyword">class</span>, <span class="keyword">function</span> (<span class="variable">$c</span>) {
+    <span class="keyword">return new</span> <span class="type">QueryBuilder</span>(<span class="variable">$c</span>-><span class="function">get</span>(<span class="type">DatabaseManager</span>::<span class="keyword">class</span>));
+});
+
+<span class="comment">// instance() — already constructed object, injected as-is</span>
+<span class="variable">$stats</span> = <span class="keyword">new</span> <span class="type">WorkerStats</span>();
+<span class="variable">$container</span>-><span class="function">instance</span>(<span class="type">WorkerStats</span>::<span class="keyword">class</span>, <span class="variable">$stats</span>);</code></pre>
+      <div class="callout callout-info">
+        <strong>get() vs make()</strong> &mdash;
+        <code>get()</code> returns the singleton if it exists, otherwise resolves via bind or autowiring.
+        <code>make()</code> forces a new instance on every call, even for a singleton.
+      </div>
+    </div>
+  </details>
+</section>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Controllers &mdash; instance-scoped, safe by default <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>Controllers are never singletons. The Container creates a new instance on each request via autowiring. You can therefore store state in <code>$this</code> without risk of leaking.</p>
+
+  <details open>
+    <summary>Example: a typical controller</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">namespace</span> App\Controllers;
+
+<span class="keyword">use</span> Framework\Core\<span class="type">DatabaseManager</span>;
+<span class="keyword">use</span> Framework\Services\<span class="type">JwtService</span>;
+
+<span class="keyword">class</span> <span class="type">UserController</span>
+{
+    <span class="comment">// Injected by the Container — fresh refs on each request</span>
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">private</span> <span class="type">DatabaseManager</span> <span class="variable">$db</span>,
+        <span class="keyword">private</span> <span class="type">JwtService</span> <span class="variable">$jwt</span>,
+    ) {}
+
+    <span class="keyword">public function</span> <span class="function">show</span>(<span class="keyword">int</span> <span class="variable">$id</span>): <span class="keyword">void</span>
+    {
+        <span class="variable">$user</span> = <span class="type">User</span>::<span class="function">find</span>(<span class="variable">$id</span>);
+
+        <span class="keyword">if</span> (!<span class="variable">$user</span>) {
+            <span class="keyword">throw new</span> <span class="type">HttpException</span>(<span class="number">404</span>, <span class="string">'User not found'</span>);
+        }
+
+        <span class="function">json</span>(<span class="variable">$user</span>-><span class="function">toArray</span>());
+    }
+}</code></pre>
+      <div class="callout callout-success">
+        <strong>Worker-safe by default.</strong> The controller is instantiated by <code>Container::get()</code> on each request. Its properties do not survive between requests.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Trap: never cache a controller as a singleton</summary>
+    <div class="details-body">
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">Dangerous</div>
+<pre><code><span class="comment">// NEVER! The controller survives between requests</span>
+<span class="variable">$container</span>-><span class="function">singleton</span>(
+    <span class="type">UserController</span>::<span class="keyword">class</span>,
+    <span class="keyword">fn</span>() => <span class="keyword">new</span> <span class="type">UserController</span>(...)
+);
+
+<span class="comment">// Request 1: $this->data = user A</span>
+<span class="comment">// Request 2: $this->data still contains user A!</span></code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">Correct</div>
+<pre><code><span class="comment">// The Container autowires automatically</span>
+<span class="comment">// No need to register controllers</span>
+<span class="variable">$controller</span> = <span class="variable">$container</span>-><span class="function">get</span>(
+    <span class="type">UserController</span>::<span class="keyword">class</span>
+);
+<span class="comment">// New instance on each request</span></code></pre>
+        </div>
+      </div>
+    </div>
+  </details>
+</section>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> Models &amp; QueryBuilder &mdash; no static cache <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>Models extend <code>Framework\Core\Model</code> with a <code>static $table</code>. They are created on demand, never cached in the Container. The QueryBuilder is also a fresh instance on each use.</p>
+
+  <details open>
+    <summary>Anatomy of a Model</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">namespace</span> App\Models;
+
+<span class="keyword">use</span> Framework\Core\<span class="type">Model</span>;
+
+<span class="keyword">class</span> <span class="type">User</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">protected static</span> <span class="keyword">string</span> <span class="variable">$table</span> = <span class="string">'users'</span>;
+    <span class="keyword">protected static</span> <span class="keyword">string</span> <span class="variable">$primaryKey</span> = <span class="string">'id'</span>;
+    <span class="keyword">protected static</span> <span class="keyword">bool</span> <span class="variable">$timestamps</span> = <span class="keyword">true</span>;
+    <span class="keyword">protected static</span> <span class="keyword">bool</span> <span class="variable">$softDeletes</span> = <span class="keyword">false</span>;
+
+    <span class="keyword">protected static</span> <span class="keyword">array</span> <span class="variable">$casts</span> = [
+        <span class="string">'id'</span>    => <span class="string">'int'</span>,
+        <span class="string">'email'</span> => <span class="string">'string'</span>,
+        <span class="string">'active'</span> => <span class="string">'bool'</span>,
+    ];
+}</code></pre>
+      <div class="callout callout-info">
+        <strong>Why <code>static $table</code> is safe?</strong>
+        The Model's static properties (<code>$table</code>, <code>$primaryKey</code>, <code>$casts</code>) are immutable <strong>configuration</strong>, not request-scoped state. They are defined in the class and never change.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>QueryBuilder — fresh instance, zero leaks</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Each call creates a new QueryBuilder</span>
+<span class="variable">$users</span> = <span class="type">User</span>::<span class="function">where</span>(<span class="string">'active'</span>, <span class="number">1</span>)
+    -><span class="function">orderBy</span>(<span class="string">'created_at'</span>, <span class="string">'DESC'</span>)
+    -><span class="function">limit</span>(<span class="number">10</span>)
+    -><span class="function">get</span>();
+
+<span class="comment">// The QueryBuilder is NOT cached</span>
+<span class="comment">// No WHERE clause "leaking" to the next request</span>
+
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">find</span>(<span class="number">42</span>);           <span class="comment">// New internal QB</span>
+<span class="variable">$admins</span> = <span class="type">Role</span>::<span class="function">where</span>(<span class="string">'name'</span>, <span class="string">'admin'</span>)-><span class="function">first</span>(); <span class="comment">// New QB</span></code></pre>
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">Anti-pattern: static result cache</div>
+<pre><code><span class="keyword">class</span> <span class="type">User</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">private static</span> <span class="keyword">array</span> <span class="variable">$cache</span> = [];
+
+    <span class="keyword">public static function</span> <span class="function">findCached</span>(<span class="keyword">int</span> <span class="variable">$id</span>)
+    {
+        <span class="comment">// The cache survives between requests!</span>
+        <span class="comment">// Memory leak + stale data</span>
+        <span class="keyword">return self</span>::<span class="variable">$cache</span>[<span class="variable">$id</span>]
+            ??= <span class="keyword">self</span>::<span class="function">find</span>(<span class="variable">$id</span>);
+    }
+}</code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">Correct: always query the DB</div>
+<pre><code><span class="comment">// No static cache in Models</span>
+<span class="comment">// Connections are pooled by DatabaseManager</span>
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">find</span>(<span class="variable">$id</span>);
+
+<span class="comment">// If you need caching, use</span>
+<span class="comment">// a dedicated service registered as singleton</span>
+<span class="comment">// with a clear invalidation strategy</span></code></pre>
+        </div>
+      </div>
+    </div>
+  </details>
+</section>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Adding a service to the Container <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>When you create a new service, the key question is: <strong>does this service carry request-scoped state?</strong></p>
+
+  <details open>
+    <summary>Decision tree</summary>
+    <div class="details-body">
+      <div class="diagram">
+Does my service carry request-scoped state?
+│
+├── NO (stateless or config-only)
+│   └── <span style="color:#a8bfd0">singleton()</span>  — one instance forever
+│       Examples: JwtService, Logger, EventDispatcher
+│
+├── YES, but the object already exists before the loop
+│   └── <span style="color:#a8bfd0">instance()</span>  — inject the object as-is
+│       Example: WorkerStats (created before the loop)
+│
+└── YES, each request needs a fresh object
+    └── <span style="color:#a8bfd0">bind()</span>     — new instance on every get()
+        Examples: Controllers, FormValidator
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Full example: adding a CacheService</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">namespace</span> App\Services;
+
+<span class="keyword">class</span> <span class="type">CacheService</span>
+{
+    <span class="keyword">private</span> <span class="keyword">array</span> <span class="variable">$store</span> = [];
+
+    <span class="keyword">public function</span> <span class="function">get</span>(<span class="keyword">string</span> <span class="variable">$key</span>): <span class="keyword">mixed</span>
+    {
+        <span class="keyword">return</span> <span class="variable">$this</span>-><span class="variable">store</span>[<span class="variable">$key</span>] ?? <span class="keyword">null</span>;
+    }
+
+    <span class="keyword">public function</span> <span class="function">set</span>(<span class="keyword">string</span> <span class="variable">$key</span>, <span class="keyword">mixed</span> <span class="variable">$value</span>, <span class="keyword">int</span> <span class="variable">$ttl</span> = <span class="number">60</span>): <span class="keyword">void</span>
+    {
+        <span class="variable">$this</span>-><span class="variable">store</span>[<span class="variable">$key</span>] = [
+            <span class="string">'value'</span> => <span class="variable">$value</span>,
+            <span class="string">'expires'</span> => <span class="function">time</span>() + <span class="variable">$ttl</span>,
+        ];
+    }
+
+    <span class="keyword">public function</span> <span class="function">flush</span>(): <span class="keyword">void</span>
+    {
+        <span class="variable">$this</span>-><span class="variable">store</span> = [];
+    }
+}</code></pre>
+
+<pre><code><span class="comment">// In your bootstrap / ServiceProvider:</span>
+<span class="variable">$container</span>-><span class="function">singleton</span>(<span class="type">CacheService</span>::<span class="keyword">class</span>, <span class="keyword">function</span> () {
+    <span class="keyword">return new</span> <span class="type">CacheService</span>();
+});
+
+<span class="comment">// The cache persists between requests (intentional!)</span>
+<span class="comment">// But watch out for memory — implement a TTL or max-size</span></code></pre>
+      <div class="callout callout-warning">
+        <strong>Memory warning.</strong> A singleton that accumulates state (like an in-memory cache) must have a cleanup strategy: TTL, max size, or periodic flush. Otherwise, memory grows indefinitely and the worker will be killed by the OS.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Registration with autowiring</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// If your service only has typed dependencies,</span>
+<span class="comment">// the Container resolves it automatically:</span>
+<span class="variable">$mailer</span> = <span class="variable">$container</span>-><span class="function">get</span>(<span class="type">MailService</span>::<span class="keyword">class</span>);
+<span class="comment">// The Container reads the constructor via Reflection,</span>
+<span class="comment">// resolves Logger, DatabaseManager, etc. automatically</span>
+
+<span class="comment">// To force singleton mode with autowiring:</span>
+<span class="variable">$container</span>-><span class="function">singleton</span>(<span class="type">MailService</span>::<span class="keyword">class</span>, <span class="type">MailService</span>::<span class="keyword">class</span>);
+<span class="comment">// Passing a string: the Container autowires it and caches it</span></code></pre>
+    </div>
+  </details>
+</section>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">5</span> Middleware &mdash; stateless pattern <span class="badge badge-advanced">Advanced</span></h2>
+
+  <p>Middleware are singletons loaded at boot via <code>addGlobalMiddleware()</code>. They live forever. <strong>They must NEVER store request-scoped state in their properties.</strong></p>
+
+  <details open>
+    <summary>Correct middleware: purely functional</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">namespace</span> App\Middleware;
+
+<span class="keyword">use</span> Framework\Services\<span class="type">JwtService</span>;
+
+<span class="keyword">class</span> <span class="type">AuthMiddleware</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">private</span> <span class="type">JwtService</span> <span class="variable">$jwt</span>,
+    ) {}
+
+    <span class="keyword">public function</span> <span class="function">handle</span>(): <span class="keyword">bool</span>
+    {
+        <span class="comment">// Read from superglobals (reset by FrankenPHP)</span>
+        <span class="variable">$header</span> = <span class="variable">$_SERVER</span>[<span class="string">'HTTP_AUTHORIZATION'</span>] ?? <span class="string">''</span>;
+
+        <span class="keyword">if</span> (!<span class="function">str_starts_with</span>(<span class="variable">$header</span>, <span class="string">'Bearer '</span>)) {
+            <span class="keyword">throw new</span> <span class="type">HttpException</span>(<span class="number">401</span>, <span class="string">'Missing token'</span>);
+        }
+
+        <span class="variable">$token</span> = <span class="function">substr</span>(<span class="variable">$header</span>, <span class="number">7</span>);
+        <span class="variable">$payload</span> = <span class="variable">$this</span>-><span class="variable">jwt</span>-><span class="function">decode</span>(<span class="variable">$token</span>);
+
+        <span class="comment">// Store in $_REQUEST (cleaned by the worker)</span>
+        <span class="variable">$_REQUEST</span>[<span class="string">'__auth_user'</span>] = <span class="variable">$payload</span>;
+
+        <span class="keyword">return</span> <span class="keyword">true</span>;  <span class="comment">// Continue the chain</span>
+    }
+}</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Anti-pattern: state in middleware</summary>
+    <div class="details-body">
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">Dangerous: request-scoped property</div>
+<pre><code><span class="keyword">class</span> <span class="type">AuthMiddleware</span>
+{
+    <span class="comment">// DANGER: survives between requests!</span>
+    <span class="keyword">private</span> ?<span class="keyword">array</span> <span class="variable">$currentUser</span> = <span class="keyword">null</span>;
+
+    <span class="keyword">public function</span> <span class="function">handle</span>(): <span class="keyword">bool</span>
+    {
+        <span class="variable">$this</span>-><span class="variable">currentUser</span> = <span class="variable">$payload</span>;
+        <span class="keyword">return</span> <span class="keyword">true</span>;
+    }
+
+    <span class="keyword">public function</span> <span class="function">getUser</span>(): ?<span class="keyword">array</span>
+    {
+        <span class="comment">// Request 2 without token: returns</span>
+        <span class="comment">// the user from request 1!</span>
+        <span class="keyword">return</span> <span class="variable">$this</span>-><span class="variable">currentUser</span>;
+    }
+}</code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">Correct: pass via $_REQUEST</div>
+<pre><code><span class="keyword">class</span> <span class="type">AuthMiddleware</span>
+{
+    <span class="comment">// No request-scoped property</span>
+
+    <span class="keyword">public function</span> <span class="function">handle</span>(): <span class="keyword">bool</span>
+    {
+        <span class="variable">$_REQUEST</span>[<span class="string">'__auth_user'</span>] = <span class="variable">$payload</span>;
+        <span class="keyword">return</span> <span class="keyword">true</span>;
+    }
+}
+
+<span class="comment">// In the controller:</span>
+<span class="variable">$user</span> = <span class="variable">$_REQUEST</span>[<span class="string">'__auth_user'</span>] ?? <span class="keyword">null</span>;
+<span class="comment">// Cleaned by the worker in the finally block</span></code></pre>
+        </div>
+      </div>
+      <div class="callout callout-danger">
+        <strong>Absolute rule.</strong> A middleware must never write request-scoped state to <code>$this</code>. Use <code>$_REQUEST</code> (cleaned in the worker's <code>finally</code> block) or an attribute on the Request object.
+      </div>
+    </div>
+  </details>
+</section>
+
+<div class="pagination">
+  <a href="01-lifecycle.html" class="prev">Lifecycle &amp; Golden Rules</a>
+  <a href="03-memory.html" class="next">Memory &amp; Performance</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

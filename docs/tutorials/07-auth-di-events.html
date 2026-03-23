@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07 — Auth, DI & Events</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Auth, DI &amp; Events</h1>
+  <p>JWT security, dependency injection and event-driven architecture</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 07 &mdash; Auth, DI &amp; Events</div>
+
+<!-- ═══════════════════════════════════════════
+     1. JWT Authentication
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> JWT Authentication <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The framework uses JSON Web Tokens (JWT) to authenticate API requests. The flow is simple: obtain a token, then send it with each request.</p>
+
+  <details open>
+    <summary>Obtain a token</summary>
+    <div class="details-body">
+      <p>Send a <code>POST /token</code> with your credentials to receive a signed JWT:</p>
+<pre><code><span class="comment"># Request</span>
+<span class="keyword">POST</span> <span class="string">/token</span>
+<span class="type">Content-Type</span>: application/json
+
+{
+    <span class="string">"email"</span>: <span class="string">"admin@example.com"</span>,
+    <span class="string">"password"</span>: <span class="string">"secret"</span>
+}
+
+<span class="comment"># Response</span>
+{
+    <span class="string">"token"</span>: <span class="string">"eyJhbGciOiJIUzI1NiIs..."</span>,
+    <span class="string">"expires_in"</span>: <span class="number">3600</span>
+}</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Use the token</summary>
+    <div class="details-body">
+      <p>Add the token in the <code>Authorization</code> header of each protected request:</p>
+<pre><code><span class="keyword">GET</span> <span class="string">/api/users</span>
+<span class="type">Authorization</span>: Bearer eyJhbGciOiJIUzI1NiIs...</code></pre>
+      <p>The <code>Auth</code> middleware validates the JWT signature, verifies that the token exists in the database (protection against revocation), then stores the user for the controller.</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Retrieve the current user</summary>
+    <div class="details-body">
+      <p>In any protected controller, use <code>Auth::user()</code>:</p>
+<pre><code><span class="keyword">use</span> <span class="type">App\Middleware\Auth</span>;
+
+<span class="keyword">class</span> <span class="type">ProfileController</span>
+{
+    <span class="keyword">public function</span> <span class="function">show</span>(): <span class="type">array</span>
+    {
+        <span class="variable">$user</span> = <span class="type">Auth</span>::<span class="function">user</span>();          <span class="comment">// array with id, email, role...</span>
+
+        <span class="keyword">return</span> [
+            <span class="string">'id'</span>    => <span class="variable">$user</span>[<span class="string">'id'</span>],
+            <span class="string">'email'</span> => <span class="variable">$user</span>[<span class="string">'email'</span>],
+            <span class="string">'role'</span>  => <span class="variable">$user</span>[<span class="string">'role'</span>],
+        ];
+    }
+}</code></pre>
+      <div class="callout callout-info">
+        <strong>Worker-safe.</strong>
+        The user is stored in <code>$_REQUEST['__auth_user']</code>, automatically cleaned by the worker between each request. No risk of leaking.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     2. RBAC — Role-Based Access
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> RBAC &mdash; Role-Based Access <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The <code>Auth</code> middleware accepts one or more authorized roles. If the user does not have the correct role, an <code>HttpException 403</code> is thrown.</p>
+
+  <details open>
+    <summary>Protect a route with a role</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">App\Middleware\Auth</span>;
+<span class="keyword">use</span> <span class="type">App\Controllers\AdminController</span>;
+
+<span class="comment">// Single authorized role</span>
+<span class="variable">$router</span>-><span class="function">get</span>(<span class="string">'/admin'</span>, [<span class="type">AdminController</span>::<span class="keyword">class</span>, <span class="string">'index'</span>], [[<span class="type">Auth</span>::<span class="keyword">class</span>, [<span class="string">'admin'</span>]]]);
+
+<span class="comment">// Multiple authorized roles</span>
+<span class="variable">$router</span>-><span class="function">get</span>(<span class="string">'/dashboard'</span>, [<span class="type">DashboardController</span>::<span class="keyword">class</span>, <span class="string">'index'</span>], [[<span class="type">Auth</span>::<span class="keyword">class</span>, [<span class="string">'admin'</span>, <span class="string">'manager'</span>]]]);
+</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Protect a route group</summary>
+    <div class="details-body">
+      <p>Use <code>group()</code> to apply the Auth middleware to multiple routes at once:</p>
+<pre><code><span class="variable">$router</span>-><span class="function">group</span>([<span class="string">'middleware'</span> => [[<span class="type">Auth</span>::<span class="keyword">class</span>, [<span class="string">'admin'</span>, <span class="string">'manager'</span>]]]], <span class="keyword">fn</span>(<span class="variable">$r</span>) =>
+    <span class="variable">$r</span>-><span class="function">get</span>(<span class="string">'/users'</span>,    [<span class="type">UserController</span>::<span class="keyword">class</span>, <span class="string">'index'</span>])
+      -><span class="function">post</span>(<span class="string">'/users'</span>,   [<span class="type">UserController</span>::<span class="keyword">class</span>, <span class="string">'store'</span>])
+      -><span class="function">delete</span>(<span class="string">'/users/{id}'</span>, [<span class="type">UserController</span>::<span class="keyword">class</span>, <span class="string">'destroy'</span>])
+);</code></pre>
+      <div class="callout callout-info">
+        <strong>Internal workings.</strong>
+        The middleware calls <code>Auth::handle($allowedRoles)</code>. It validates the JWT, loads the user from the DB, then compares <code>$user['role']</code> with the array of authorized roles via <code>in_array()</code>.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     3. Container DI
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> Container DI <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The Container is the heart of the architecture. It manages the creation and injection of services throughout the application.</p>
+
+  <details open>
+    <summary>The 5 essential methods</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Method</th><th>Description</th><th>Usage</th></tr></thead>
+        <tbody>
+          <tr><td><code>bind($abstract, $concrete)</code></td><td>Registers a factory &mdash; new instance on each call</td><td>Stateless services</td></tr>
+          <tr><td><code>singleton($abstract, $concrete)</code></td><td>Registers a singleton &mdash; instantiated once</td><td>Connections, configs</td></tr>
+          <tr><td><code>instance($abstract, $object)</code></td><td>Registers an already constructed object</td><td>Boot-time objects</td></tr>
+          <tr><td><code>get($abstract)</code></td><td>Resolves a dependency (singleton-aware)</td><td>Retrieve a service</td></tr>
+          <tr><td><code>make($abstract, $params)</code></td><td>Always creates a new instance (ignores the cache)</td><td>Unique instances</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Register a service</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\Container</span>;
+<span class="keyword">use</span> <span class="type">Framework\Core\Env</span>;
+
+<span class="variable">$container</span> = <span class="type">Container</span>::<span class="function">getInstance</span>();
+
+<span class="comment">// Singleton: created once, reused everywhere</span>
+<span class="variable">$container</span>-><span class="function">singleton</span>(<span class="type">StripeService</span>::<span class="keyword">class</span>, <span class="keyword">fn</span>() =>
+    <span class="keyword">new</span> <span class="type">StripeService</span>(<span class="type">Env</span>::<span class="function">get</span>(<span class="string">'STRIPE_KEY'</span>))
+);
+
+<span class="comment">// Bind: new instance on each resolution</span>
+<span class="variable">$container</span>-><span class="function">bind</span>(<span class="type">PdfGenerator</span>::<span class="keyword">class</span>, <span class="keyword">fn</span>() =>
+    <span class="keyword">new</span> <span class="type">PdfGenerator</span>(<span class="string">'/tmp/pdf'</span>)
+);
+
+<span class="comment">// Instance: already constructed object</span>
+<span class="variable">$container</span>-><span class="function">instance</span>(<span class="string">'config'</span>, [<span class="string">'debug'</span> => <span class="keyword">true</span>]);</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Autowiring &mdash; automatic injection</summary>
+    <div class="details-body">
+      <p>The Container automatically resolves constructor dependencies via type-hint. No manual configuration needed:</p>
+<pre><code><span class="keyword">class</span> <span class="type">OrderController</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">private</span> <span class="type">StripeService</span> <span class="variable">$stripe</span>,  <span class="comment">// Automatically injected</span>
+        <span class="keyword">private</span> <span class="type">PdfGenerator</span> <span class="variable">$pdf</span>,     <span class="comment">// Automatically injected</span>
+    ) {}
+
+    <span class="keyword">public function</span> <span class="function">invoice</span>(<span class="type">int</span> <span class="variable">$id</span>): <span class="type">array</span>
+    {
+        <span class="variable">$charge</span> = <span class="variable">$this</span>-><span class="variable">stripe</span>-><span class="function">getCharge</span>(<span class="variable">$id</span>);
+        <span class="variable">$this</span>-><span class="variable">pdf</span>-><span class="function">generate</span>(<span class="variable">$charge</span>);
+        <span class="keyword">return</span> [<span class="string">'status'</span> => <span class="string">'generated'</span>];
+    }
+}</code></pre>
+      <div class="callout callout-info">
+        <strong>Recursive resolution.</strong>
+        If <code>StripeService</code> itself has dependencies in its constructor, the Container resolves them too, recursively. Default values and nullable types are supported.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     4. Event Dispatcher
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Event Dispatcher <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The event system allows decoupling components. A service dispatches an event, listeners react without direct coupling.</p>
+
+  <details open>
+    <summary>Dispatch an event</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\Event</span>;
+
+<span class="comment">// With a string name + payload</span>
+<span class="type">Event</span>::<span class="function">dispatch</span>(<span class="string">'user.created'</span>, <span class="variable">$user</span>);
+
+<span class="comment">// With an event object (recommended)</span>
+<span class="type">Event</span>::<span class="function">dispatch</span>(<span class="keyword">new</span> <span class="type">UserCreated</span>(<span class="variable">$user</span>));</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Listen for an event</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Inline listener (at boot only!)</span>
+<span class="type">Event</span>::<span class="function">listen</span>(<span class="string">'user.created'</span>, <span class="keyword">function</span> (<span class="variable">$user</span>) {
+    <span class="function">error_log</span>(<span class="string">"New user: "</span> . <span class="variable">$user</span>[<span class="string">'email'</span>]);
+});
+
+<span class="comment">// One-shot listener (executed once)</span>
+<span class="type">Event</span>::<span class="function">once</span>(<span class="string">'app.ready'</span>, <span class="keyword">fn</span>() => <span class="function">error_log</span>(<span class="string">'Application started'</span>));</code></pre>
+      <div class="callout callout-danger">
+        <strong>Worker rule: never Event::listen() in a controller.</strong>
+        Listeners accumulate on each request. Request 1: 1 listener. Request 100: 100 identical listeners. Place them at boot or in <code>app/Listeners/</code>.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Attribute #[Listener] &mdash; automatic discovery</summary>
+    <div class="details-body">
+      <p>Create a class in <code>app/Listeners/</code> with the <code>#[Listener]</code> attribute. The framework discovers it automatically at boot:</p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Listeners</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Attributes\Listener</span>;
+<span class="keyword">use</span> <span class="type">App\Events\UserCreated</span>;
+
+<span class="comment">// Automatic discovery via discoverListeners()</span>
+#[<span class="type">Listener</span>(<span class="type">UserCreated</span>::<span class="keyword">class</span>, priority: <span class="number">0</span>)]
+<span class="keyword">class</span> <span class="type">SendWelcomeEmail</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">UserCreated</span> <span class="variable">$event</span>): <span class="keyword">void</span>
+    {
+        <span class="comment">// Send the welcome email</span>
+        <span class="function">mail</span>(<span class="variable">$event</span>-><span class="variable">user</span>[<span class="string">'email'</span>], <span class="string">'Welcome!'</span>, <span class="string">'...'</span>);
+    }
+}</code></pre>
+      <p>Discovery is triggered at application boot:</p>
+<pre><code><span class="variable">$dispatcher</span> = <span class="type">Container</span>::<span class="function">getInstance</span>()-><span class="function">get</span>(<span class="type">EventDispatcher</span>::<span class="keyword">class</span>);
+<span class="variable">$dispatcher</span>-><span class="function">discoverListeners</span>(<span class="function">__DIR__</span> . <span class="string">'/app/Listeners'</span>);</code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     5. Event Brokers
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">5</span> Event Brokers <span class="badge badge-advanced">Advanced</span></h2>
+
+  <p>The dispatcher supports 3 brokers: <strong>sync</strong> (default), <strong>redis</strong>, and <strong>database</strong>. Local listeners are always executed immediately; the redis and database brokers add an external publication for async processing.</p>
+
+  <details open>
+    <summary>Broker comparison</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Broker</th><th>Execution</th><th>Dependency</th><th>Persistence</th><th>Use case</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>sync</code></td>
+            <td>Immediate, same process</td>
+            <td>None</td>
+            <td>Non</td>
+            <td>Dev, simple logic</td>
+          </tr>
+          <tr>
+            <td><code>redis</code></td>
+            <td>Immediate + Redis publication</td>
+            <td>Extension php-redis</td>
+            <td>Volatile (Redis)</td>
+            <td>Microservices, real-time</td>
+          </tr>
+          <tr>
+            <td><code>database</code></td>
+            <td>Immediate + DB insertion</td>
+            <td>Table <code>events</code></td>
+            <td>Durable (SQL)</td>
+            <td>Audit, reliable queue</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>.env Configuration</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Broker selection</span>
+<span class="variable">EVENT_BROKER</span>=<span class="string">sync</span>          <span class="comment"># sync | redis | database</span>
+
+<span class="comment"># Redis configuration (if EVENT_BROKER=redis)</span>
+<span class="variable">REDIS_HOST</span>=<span class="string">127.0.0.1</span>
+<span class="variable">REDIS_PORT</span>=<span class="number">6379</span>
+<span class="variable">REDIS_PASSWORD</span>=<span class="string">null</span>
+<span class="variable">REDIS_DB</span>=<span class="number">0</span>
+<span class="variable">REDIS_PREFIX</span>=<span class="string">app:events:</span>
+
+<span class="comment"># Database configuration (if EVENT_BROKER=database)</span>
+<span class="variable">EVENT_DB_CONNECTION</span>=<span class="string">default</span>
+<span class="variable">EVENT_DB_TABLE</span>=<span class="string">events</span></code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Required SQL table for database broker</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">CREATE TABLE</span> events (
+    id         <span class="type">SERIAL</span> <span class="keyword">PRIMARY KEY</span>,
+    event      <span class="type">VARCHAR</span>(<span class="number">255</span>) <span class="keyword">NOT NULL</span>,
+    payload    <span class="type">JSONB</span>,
+    status     <span class="type">VARCHAR</span>(<span class="number">20</span>) <span class="keyword">DEFAULT</span> <span class="string">'pending'</span>,
+    created_at <span class="type">TIMESTAMP</span> <span class="keyword">DEFAULT</span> <span class="function">NOW</span>(),
+    processed_at <span class="type">TIMESTAMP</span> <span class="keyword">NULL</span>
+);</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Instantiation with driver</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\EventDispatcher</span>;
+
+<span class="comment">// Automatic creation based on EVENT_BROKER</span>
+<span class="variable">$dispatcher</span> = <span class="type">EventDispatcher</span>::<span class="function">withDriver</span>(<span class="type">Env</span>::<span class="function">get</span>(<span class="string">'EVENT_BROKER'</span>, <span class="string">'sync'</span>));
+
+<span class="comment">// Check the active driver</span>
+<span class="function">echo</span> <span class="variable">$dispatcher</span>-><span class="function">driverName</span>();  <span class="comment">// "sync", "redis", ou "database"</span></code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     Exercices
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">&#9998;</span> Exercices</h2>
+
+  <details>
+    <summary>Exercise 1 : Route protegee par role <span class="badge badge-beginner">Beginner</span></summary>
+    <div class="details-body">
+      <p><strong>Goal:</strong> Create a route <code>GET /articles/create</code> accessible only to users with the <code>editor</code> role.</p>
+      <p><strong>Hints:</strong></p>
+      <ul>
+        <li>Use the <code>Auth</code> middleware with the <code>'editor'</code> role</li>
+        <li>The controller should return <code>['form' => 'article_create']</code></li>
+        <li>Test with a token from a user with a different role &mdash; you should get a 403</li>
+      </ul>
+      <details>
+        <summary>Solution</summary>
+        <div class="details-body">
+<pre><code><span class="comment">// routes/api.php</span>
+<span class="keyword">use</span> <span class="type">App\Middleware\Auth</span>;
+<span class="keyword">use</span> <span class="type">App\Controllers\ArticleController</span>;
+
+<span class="variable">$router</span>-><span class="function">get</span>(
+    <span class="string">'/articles/create'</span>,
+    [<span class="type">ArticleController</span>::<span class="keyword">class</span>, <span class="string">'create'</span>],
+    [[<span class="type">Auth</span>::<span class="keyword">class</span>, [<span class="string">'editor'</span>]]]
+);
+
+<span class="comment">// app/Controllers/ArticleController.php</span>
+<span class="keyword">class</span> <span class="type">ArticleController</span>
+{
+    <span class="keyword">public function</span> <span class="function">create</span>(): <span class="type">array</span>
+    {
+        <span class="keyword">return</span> [<span class="string">'form'</span> => <span class="string">'article_create'</span>];
+    }
+}</code></pre>
+        </div>
+      </details>
+    </div>
+  </details>
+
+  <details>
+    <summary>Exercise 2 : Listener de connexion <span class="badge badge-intermediate">Intermediate</span></summary>
+    <div class="details-body">
+      <p><strong>Goal:</strong> Create a listener that logs each user login. When the <code>user.login</code> event is dispatched, write the email and date to a log file.</p>
+      <p><strong>Hints:</strong></p>
+      <ul>
+        <li>Create a class in <code>app/Listeners/</code> with the <code>#[Listener]</code> attribute</li>
+        <li>Use <code>file_put_contents()</code> with <code>FILE_APPEND</code></li>
+        <li>Dispatch the event in the <code>TokenController</code> after successful authentication</li>
+      </ul>
+      <details>
+        <summary>Solution</summary>
+        <div class="details-body">
+<pre><code><span class="comment">// app/Listeners/LogUserLogin.php</span>
+<span class="keyword">namespace</span> <span class="type">App\Listeners</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Attributes\Listener</span>;
+
+#[<span class="type">Listener</span>(<span class="string">'user.login'</span>)]
+<span class="keyword">class</span> <span class="type">LogUserLogin</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">mixed</span> <span class="variable">$payload</span>): <span class="keyword">void</span>
+    {
+        <span class="variable">$line</span> = <span class="function">sprintf</span>(
+            <span class="string">"[%s] Login: %s\n"</span>,
+            <span class="function">date</span>(<span class="string">'Y-m-d H:i:s'</span>),
+            <span class="variable">$payload</span>[<span class="string">'email'</span>] ?? <span class="string">'unknown'</span>
+        );
+        <span class="function">file_put_contents</span>(<span class="string">__DIR__ . '/../../storage/logs/logins.log'</span>, <span class="variable">$line</span>, <span class="keyword">FILE_APPEND</span>);
+    }
+}
+
+<span class="comment">// In TokenController::generate(), after token creation:</span>
+<span class="type">Event</span>::<span class="function">dispatch</span>(<span class="string">'user.login'</span>, [<span class="string">'email'</span> => <span class="variable">$user</span>[<span class="string">'email'</span>], <span class="string">'ip'</span> => <span class="variable">$_SERVER</span>[<span class="string">'REMOTE_ADDR'</span>]]);</code></pre>
+        </div>
+      </details>
+    </div>
+  </details>
+
+  <details>
+    <summary>Exercise 3 : Service custom dans le Container <span class="badge badge-advanced">Advanced</span></summary>
+    <div class="details-body">
+      <p><strong>Goal:</strong> Create a <code>NotificationService</code> service, register it as a singleton in the Container, and inject it automatically in a controller via autowiring.</p>
+      <p><strong>Hints:</strong></p>
+      <ul>
+        <li>The service should have a constructor that receives an API key from <code>Env::get()</code></li>
+        <li>Register it with <code>singleton()</code> at boot</li>
+        <li>The controller should declare the type-hint in its constructor &mdash; the Container does the rest</li>
+      </ul>
+      <details>
+        <summary>Solution</summary>
+        <div class="details-body">
+<pre><code><span class="comment">// app/Services/NotificationService.php</span>
+<span class="keyword">namespace</span> <span class="type">App\Services</span>;
+
+<span class="keyword">class</span> <span class="type">NotificationService</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">private</span> <span class="type">string</span> <span class="variable">$apiKey</span>
+    ) {}
+
+    <span class="keyword">public function</span> <span class="function">send</span>(<span class="type">string</span> <span class="variable">$to</span>, <span class="type">string</span> <span class="variable">$message</span>): <span class="type">bool</span>
+    {
+        <span class="comment">// Sending logic...</span>
+        <span class="keyword">return</span> <span class="keyword">true</span>;
+    }
+}
+
+<span class="comment">// At boot (index.php or bootstrap):</span>
+<span class="variable">$container</span>-><span class="function">singleton</span>(<span class="type">NotificationService</span>::<span class="keyword">class</span>, <span class="keyword">fn</span>() =>
+    <span class="keyword">new</span> <span class="type">NotificationService</span>(<span class="type">Env</span>::<span class="function">get</span>(<span class="string">'NOTIFICATION_API_KEY'</span>))
+);
+
+<span class="comment">// app/Controllers/AlertController.php</span>
+<span class="keyword">class</span> <span class="type">AlertController</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">private</span> <span class="type">NotificationService</span> <span class="variable">$notifier</span>  <span class="comment">// Autowired!</span>
+    ) {}
+
+    <span class="keyword">public function</span> <span class="function">send</span>(): <span class="type">array</span>
+    {
+        <span class="variable">$user</span> = <span class="type">Auth</span>::<span class="function">user</span>();
+        <span class="variable">$this</span>-><span class="variable">notifier</span>-><span class="function">send</span>(<span class="variable">$user</span>[<span class="string">'email'</span>], <span class="string">'Test alert'</span>);
+        <span class="keyword">return</span> [<span class="string">'status'</span> => <span class="string">'sent'</span>];
+    }
+}</code></pre>
+        </div>
+      </details>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     Pagination
+     ═══════════════════════════════════════════ -->
+
+<div class="pagination">
+  <a href="06-orm.html" class="prev">ORM</a>
+  <a href="08-exercises-framework.html" class="next">Framework Exercises</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

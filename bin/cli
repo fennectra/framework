@@ -1,0 +1,73 @@
+#!/usr/bin/env php
+<?php
+
+// Détection de la racine projet : remonte les dossiers parents jusqu'à trouver vendor/autoload.php
+$dir = dirname(__DIR__);
+$autoload = null;
+
+// Méthode 1 : variable d'environnement (set par forge)
+if (getenv('FENNEC_BASE_PATH') && file_exists(getenv('FENNEC_BASE_PATH') . '/vendor/autoload.php')) {
+    $autoload = getenv('FENNEC_BASE_PATH') . '/vendor/autoload.php';
+}
+
+// Méthode 2 : développement local du framework
+if (!$autoload && file_exists($dir . '/vendor/autoload.php')) {
+    $autoload = $dir . '/vendor/autoload.php';
+}
+
+// Méthode 3 : remonte les dossiers parents (gère symlinks/junctions)
+if (!$autoload) {
+    $search = $dir;
+    for ($i = 0; $i < 10; $i++) {
+        $candidate = $search . '/vendor/autoload.php';
+        if (file_exists($candidate)) {
+            $autoload = $candidate;
+            break;
+        }
+        $parent = dirname($search);
+        if ($parent === $search) {
+            break;
+        }
+        $search = $parent;
+    }
+}
+
+if (!$autoload) {
+    fwrite(STDERR, "Autoloader introuvable. Lancez 'composer install'.\n");
+    exit(1);
+}
+
+// Racine du projet = 2 niveaux au-dessus du vendor/autoload.php
+$projectRoot = dirname($autoload, 2);
+define('FENNEC_BASE_PATH', $projectRoot);
+
+require_once $autoload;
+
+use Fennec\Core\Container;
+use Fennec\Core\JwtService;
+use Fennec\Core\Cli\CommandRunner;
+
+// Initialisation du container
+$container = new Container();
+
+// Enregistrer JwtService uniquement si SECRET_KEY est défini (pas obligatoire pour le CLI)
+try {
+    $container->singleton(JwtService::class, fn() => new JwtService());
+} catch (\RuntimeException) {
+    // SECRET_KEY non définie — pas grave pour les commandes CLI
+}
+
+// Enregistrer DatabaseManager pour les commandes qui ont besoin de la DB
+$container->singleton(\Fennec\Core\DatabaseManager::class, fn() => new \Fennec\Core\DatabaseManager());
+
+// Découverte et exécution des commandes
+$runner = new CommandRunner($container);
+$runner->discoverCommands(dirname(__DIR__) . '/src/Commands');
+
+// Commandes applicatives (si le dossier existe)
+$appCommands = $projectRoot . '/app/Commands';
+if (is_dir($appCommands)) {
+    $runner->discoverCommands($appCommands);
+}
+
+exit($runner->run($argv));

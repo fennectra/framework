@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 — Exercises — Worker Mode</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Exercises &mdash; Worker Mode</h1>
+  <p>6 practical exercises to master worker mode pitfalls</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 04 &mdash; Worker Exercises</div>
+
+<!-- ════════════════════════════════════════════
+     EXERCISE 1
+     ════════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Exercises <span class="badge badge-beginner">Beginner</span> <span class="badge badge-intermediate">Intermediate</span> <span class="badge badge-advanced">Advanced</span></h2>
+
+  <div class="exercise">
+    <div class="exercise-title">Exercise 1 — Find the worker bug <span class="badge badge-beginner">Beginner</span></div>
+
+    <p>This <code>StatsController</code> works perfectly in PHP-FPM. In worker mode, users report that the call counter displays strange numbers. Find the bug.</p>
+
+<pre><code><span class="keyword">class</span> <span class="type">StatsController</span>
+{
+    <span class="keyword">private static</span> <span class="type">int</span> <span class="variable">$callCount</span> = <span class="number">0</span>;
+
+    <span class="keyword">public function</span> <span class="function">index</span>(): <span class="type">array</span>
+    {
+        <span class="keyword">self</span>::<span class="variable">$callCount</span>++;
+
+        <span class="keyword">return</span> [
+            <span class="string">'status'</span>  => <span class="string">'ok'</span>,
+            <span class="string">'calls'</span>   => <span class="keyword">self</span>::<span class="variable">$callCount</span>,
+            <span class="string">'message'</span> => <span class="string">'Number of calls to this route'</span>,
+        ];
+    }
+}</code></pre>
+
+    <p><strong>Question:</strong> Why does the counter increase indefinitely? What does the user see on the 500th request?</p>
+
+    <details>
+      <summary>See the solution</summary>
+      <div class="details-body">
+        <div class="callout callout-danger">
+          <strong>The problem</strong>
+          <code>static $callCount</code> persists between requests in worker mode. Each request handled by this thread increments the same counter. On the 500th request, the user sees <code>"calls": 500</code> instead of <code>"calls": 1</code>.
+        </div>
+
+        <p>In PHP-FPM, each request starts a new process: <code>$callCount</code> is always reset to 0. In worker mode, the class stays in memory.</p>
+
+        <p><strong>Solutions:</strong></p>
+        <ul>
+          <li><strong>If the counter is intentional</strong> (internal metrics): this is the correct behavior, but document it. The counter is per-thread, not global.</li>
+          <li><strong>If it's a business counter</strong>: store it in the database or via Redis.</li>
+        </ul>
+
+        <div class="compare">
+          <div class="compare-bad">
+            <div class="compare-label">Dangerous</div>
+<pre><code><span class="keyword">private static</span> <span class="type">int</span> <span class="variable">$callCount</span> = <span class="number">0</span>;
+<span class="comment">// Accumulates between requests!</span></code></pre>
+          </div>
+          <div class="compare-good">
+            <div class="compare-label">Correct (business counter)</div>
+<pre><code><span class="keyword">public function</span> <span class="function">index</span>(<span class="type">Database</span> <span class="variable">$db</span>): <span class="type">array</span>
+{
+    <span class="variable">$db</span>-><span class="function">exec</span>(
+        <span class="string">'UPDATE stats SET calls = calls + 1'</span>
+    );
+    <span class="variable">$count</span> = <span class="variable">$db</span>-><span class="function">fetchOne</span>(
+        <span class="string">'SELECT calls FROM stats'</span>
+    );
+    <span class="keyword">return</span> [<span class="string">'calls'</span> => <span class="variable">$count</span>];
+}</code></pre>
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+
+<!-- ════════════════════════════════════════════
+     EXERCISE 2
+     ════════════════════════════════════════════ -->
+
+  <div class="exercise">
+    <div class="exercise-title">Exercise 2 — Memory leak <span class="badge badge-intermediate">Intermediate</span></div>
+
+    <p>This audit service records each user action. After a few hours in production, the worker consumes 2 GB of RAM and ends up being killed by the OOM killer.</p>
+
+<pre><code><span class="keyword">class</span> <span class="type">AuditService</span>
+{
+    <span class="keyword">private static</span> <span class="type">array</span> <span class="variable">$logs</span> = [];
+
+    <span class="keyword">public static function</span> <span class="function">log</span>(<span class="type">string</span> <span class="variable">$action</span>, <span class="type">array</span> <span class="variable">$context</span> = []): <span class="type">void</span>
+    {
+        <span class="keyword">self</span>::<span class="variable">$logs</span>[] = [
+            <span class="string">'time'</span>    => <span class="function">microtime</span>(<span class="keyword">true</span>),
+            <span class="string">'action'</span>  => <span class="variable">$action</span>,
+            <span class="string">'context'</span> => <span class="variable">$context</span>,
+            <span class="string">'memory'</span>  => <span class="function">memory_get_usage</span>(),
+        ];
+    }
+
+    <span class="keyword">public static function</span> <span class="function">getAll</span>(): <span class="type">array</span>
+    {
+        <span class="keyword">return</span> <span class="keyword">self</span>::<span class="variable">$logs</span>;
+    }
+}</code></pre>
+
+    <p><strong>Question:</strong> Why does memory explode? Propose 3 correction strategies.</p>
+
+    <details>
+      <summary>See the solution</summary>
+      <div class="details-body">
+        <div class="callout callout-danger">
+          <strong>The problem</strong>
+          <code>static $logs</code> is an array that grows on each request without ever being emptied. After 100,000 requests with rich contexts, the array occupies hundreds of MB.
+        </div>
+
+        <p><strong>3 correction strategies:</strong></p>
+
+        <p><strong>1. Write to database (recommended)</strong></p>
+<pre><code><span class="keyword">public static function</span> <span class="function">log</span>(<span class="type">string</span> <span class="variable">$action</span>, <span class="type">array</span> <span class="variable">$context</span> = []): <span class="type">void</span>
+{
+    <span class="type">Database</span>::<span class="function">table</span>(<span class="string">'audit_logs'</span>)-><span class="function">insert</span>([
+        <span class="string">'action'</span>  => <span class="variable">$action</span>,
+        <span class="string">'context'</span> => <span class="function">json_encode</span>(<span class="variable">$context</span>),
+        <span class="string">'time'</span>    => <span class="function">microtime</span>(<span class="keyword">true</span>),
+    ]);
+}</code></pre>
+
+        <p><strong>2. Use a file Logger</strong></p>
+<pre><code><span class="keyword">public static function</span> <span class="function">log</span>(<span class="type">string</span> <span class="variable">$action</span>, <span class="type">array</span> <span class="variable">$context</span> = []): <span class="type">void</span>
+{
+    <span class="variable">$line</span> = <span class="function">json_encode</span>([<span class="string">'action'</span> => <span class="variable">$action</span>, <span class="string">'context'</span> => <span class="variable">$context</span>]);
+    <span class="function">file_put_contents</span>(<span class="string">'audit.log'</span>, <span class="variable">$line</span> . <span class="string">"\n"</span>, <span class="number">FILE_APPEND</span>);
+}</code></pre>
+
+        <p><strong>3. Limit in-memory buffer size</strong></p>
+<pre><code><span class="keyword">private static</span> <span class="type">int</span> <span class="variable">$maxLogs</span> = <span class="number">100</span>;
+
+<span class="keyword">public static function</span> <span class="function">log</span>(<span class="type">string</span> <span class="variable">$action</span>, <span class="type">array</span> <span class="variable">$context</span> = []): <span class="type">void</span>
+{
+    <span class="keyword">self</span>::<span class="variable">$logs</span>[] = [<span class="string">'action'</span> => <span class="variable">$action</span>, <span class="string">'context'</span> => <span class="variable">$context</span>];
+
+    <span class="keyword">if</span> (<span class="function">count</span>(<span class="keyword">self</span>::<span class="variable">$logs</span>) > <span class="keyword">self</span>::<span class="variable">$maxLogs</span>) {
+        <span class="keyword">self</span>::<span class="variable">$logs</span> = <span class="function">array_slice</span>(<span class="keyword">self</span>::<span class="variable">$logs</span>, -<span class="keyword">self</span>::<span class="variable">$maxLogs</span>);
+    }
+}</code></pre>
+
+        <div class="callout callout-info">
+          <strong>Rule</strong>
+          In worker mode, never store unlimited data in a static property. If you need a buffer, set a maximum size and purge regularly.
+        </div>
+      </div>
+    </details>
+  </div>
+
+<!-- ════════════════════════════════════════════
+     EXERCISE 3
+     ════════════════════════════════════════════ -->
+
+  <div class="exercise">
+    <div class="exercise-title">Exercise 3 — Security flaw: privilege escalation <span class="badge badge-advanced">Advanced</span></div>
+
+    <p>This middleware protects admin routes. A tester discovers that after an admin logs in, <strong>all subsequent users</strong> have access to admin routes. This is a critical vulnerability.</p>
+
+<pre><code><span class="keyword">class</span> <span class="type">AdminMiddleware</span>
+{
+    <span class="keyword">private static</span> <span class="type">bool</span> <span class="variable">$isAdmin</span> = <span class="keyword">false</span>;
+
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">array</span> <span class="variable">$request</span>, <span class="type">callable</span> <span class="variable">$next</span>): <span class="type">mixed</span>
+    {
+        <span class="keyword">if</span> (<span class="keyword">isset</span>(<span class="variable">$request</span>[<span class="string">'user'</span>]) && <span class="variable">$request</span>[<span class="string">'user'</span>][<span class="string">'role'</span>] === <span class="string">'admin'</span>) {
+            <span class="keyword">self</span>::<span class="variable">$isAdmin</span> = <span class="keyword">true</span>;
+        }
+
+        <span class="keyword">if</span> (!<span class="keyword">self</span>::<span class="variable">$isAdmin</span>) {
+            <span class="keyword">throw new</span> <span class="type">HttpException</span>(<span class="number">403</span>, <span class="string">'Forbidden'</span>);
+        }
+
+        <span class="keyword">return</span> <span class="variable">$next</span>(<span class="variable">$request</span>);
+    }
+}</code></pre>
+
+    <p><strong>Question:</strong> Explain the complete attack scenario. How to fix it?</p>
+
+    <details>
+      <summary>See the solution</summary>
+      <div class="details-body">
+        <div class="callout callout-danger">
+          <strong>Attack scenario</strong>
+          <ol>
+            <li>Request 1: Admin logs in. <code>$isAdmin</code> becomes <code>true</code>.</li>
+            <li>Request 2: Regular user arrives. <code>$isAdmin</code> is <strong>still <code>true</code></strong> (static persists).</li>
+            <li>The <code>if</code> <strong>never</strong> sets <code>$isAdmin</code> back to <code>false</code>.</li>
+            <li>Result: <strong>everyone is admin</strong> on this thread.</li>
+          </ol>
+        </div>
+
+        <p><strong>Fix:</strong> never cache an authorization state in a static property. Check on every request.</p>
+
+        <div class="compare">
+          <div class="compare-bad">
+            <div class="compare-label">Critical vulnerability</div>
+<pre><code><span class="keyword">private static</span> <span class="type">bool</span> <span class="variable">$isAdmin</span> = <span class="keyword">false</span>;
+<span class="comment">// Never reset!</span></code></pre>
+          </div>
+          <div class="compare-good">
+            <div class="compare-label">Correct</div>
+<pre><code><span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">array</span> <span class="variable">$request</span>, <span class="type">callable</span> <span class="variable">$next</span>): <span class="type">mixed</span>
+{
+    <span class="comment">// Check on every request, no caching</span>
+    <span class="variable">$isAdmin</span> = <span class="keyword">isset</span>(<span class="variable">$request</span>[<span class="string">'user'</span>])
+        && <span class="variable">$request</span>[<span class="string">'user'</span>][<span class="string">'role'</span>] === <span class="string">'admin'</span>;
+
+    <span class="keyword">if</span> (!<span class="variable">$isAdmin</span>) {
+        <span class="keyword">throw new</span> <span class="type">HttpException</span>(<span class="number">403</span>, <span class="string">'Forbidden'</span>);
+    }
+
+    <span class="keyword">return</span> <span class="variable">$next</span>(<span class="variable">$request</span>);
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <strong>Security rule</strong>
+          Never use <code>static</code> to store authorization decisions. Each request must be evaluated independently. This is the most important rule in worker mode.
+        </div>
+      </div>
+    </details>
+  </div>
+
+<!-- ════════════════════════════════════════════
+     EXERCISE 4
+     ════════════════════════════════════════════ -->
+
+  <div class="exercise">
+    <div class="exercise-title">Exercise 4 — Orphaned transaction <span class="badge badge-intermediate">Intermediate</span></div>
+
+    <p>This controller creates a user with a profile. Sometimes, subsequent requests fail with <code>"SQLSTATE: there is already an active transaction"</code>. Find out why.</p>
+
+<pre><code><span class="keyword">class</span> <span class="type">UserController</span>
+{
+    <span class="keyword">public function</span> <span class="function">create</span>(<span class="type">Database</span> <span class="variable">$db</span>, <span class="type">array</span> <span class="variable">$data</span>): <span class="type">array</span>
+    {
+        <span class="variable">$db</span>-><span class="function">exec</span>(<span class="string">'BEGIN'</span>);
+
+        <span class="variable">$userId</span> = <span class="variable">$db</span>-><span class="function">insert</span>(<span class="string">'users'</span>, [
+            <span class="string">'name'</span>  => <span class="variable">$data</span>[<span class="string">'name'</span>],
+            <span class="string">'email'</span> => <span class="variable">$data</span>[<span class="string">'email'</span>],
+        ]);
+
+        <span class="comment">// If $data['bio'] is missing, an exception is thrown here</span>
+        <span class="variable">$db</span>-><span class="function">insert</span>(<span class="string">'profiles'</span>, [
+            <span class="string">'user_id'</span> => <span class="variable">$userId</span>,
+            <span class="string">'bio'</span>     => <span class="variable">$data</span>[<span class="string">'bio'</span>],
+        ]);
+
+        <span class="variable">$db</span>-><span class="function">exec</span>(<span class="string">'COMMIT'</span>);
+
+        <span class="keyword">return</span> [<span class="string">'id'</span> => <span class="variable">$userId</span>];
+    }
+}</code></pre>
+
+    <p><strong>Question:</strong> What happens if the profile insertion fails? Why is the next worker request affected?</p>
+
+    <details>
+      <summary>See the solution</summary>
+      <div class="details-body">
+        <div class="callout callout-danger">
+          <strong>The problem</strong>
+          If <code>insert('profiles', ...)</code> throws an exception, the <code>COMMIT</code> is never executed. The transaction stays open. The PDO connection persists in worker mode, so the next request using this connection inherits an open transaction.
+        </div>
+
+        <p><strong>Scenario:</strong></p>
+        <ol>
+          <li>Request 1: <code>BEGIN</code> &rarr; <code>INSERT users</code> &rarr; exception &rarr; no <code>COMMIT</code> or <code>ROLLBACK</code>.</li>
+          <li>The transaction stays open on the PDO connection.</li>
+          <li>Request 2: attempts a <code>BEGIN</code> &rarr; "active transaction" error.</li>
+          <li>Worse: if no <code>BEGIN</code>, writes occur in request 1's orphaned transaction.</li>
+        </ol>
+
+        <p><strong>Solution 1: try/catch with ROLLBACK</strong></p>
+<pre><code><span class="keyword">public function</span> <span class="function">create</span>(<span class="type">Database</span> <span class="variable">$db</span>, <span class="type">array</span> <span class="variable">$data</span>): <span class="type">array</span>
+{
+    <span class="variable">$db</span>-><span class="function">exec</span>(<span class="string">'BEGIN'</span>);
+
+    <span class="keyword">try</span> {
+        <span class="variable">$userId</span> = <span class="variable">$db</span>-><span class="function">insert</span>(<span class="string">'users'</span>, [...]);
+        <span class="variable">$db</span>-><span class="function">insert</span>(<span class="string">'profiles'</span>, [...]);
+        <span class="variable">$db</span>-><span class="function">exec</span>(<span class="string">'COMMIT'</span>);
+    } <span class="keyword">catch</span> (<span class="type">\Throwable</span> <span class="variable">$e</span>) {
+        <span class="variable">$db</span>-><span class="function">exec</span>(<span class="string">'ROLLBACK'</span>);
+        <span class="keyword">throw</span> <span class="variable">$e</span>;
+    }
+
+    <span class="keyword">return</span> [<span class="string">'id'</span> => <span class="variable">$userId</span>];
+}</code></pre>
+
+        <p><strong>Solution 2: transaction() method (recommended)</strong></p>
+<pre><code><span class="keyword">public function</span> <span class="function">create</span>(<span class="type">Database</span> <span class="variable">$db</span>, <span class="type">array</span> <span class="variable">$data</span>): <span class="type">array</span>
+{
+    <span class="keyword">return</span> <span class="variable">$db</span>-><span class="function">transaction</span>(<span class="keyword">function</span> () <span class="keyword">use</span> (<span class="variable">$db</span>, <span class="variable">$data</span>) {
+        <span class="variable">$userId</span> = <span class="variable">$db</span>-><span class="function">insert</span>(<span class="string">'users'</span>, [...]);
+        <span class="variable">$db</span>-><span class="function">insert</span>(<span class="string">'profiles'</span>, [...]);
+        <span class="keyword">return</span> [<span class="string">'id'</span> => <span class="variable">$userId</span>];
+    });
+}</code></pre>
+
+        <div class="callout callout-info">
+          <strong>Our framework handles it</strong>
+          The worker cleanup calls <code>$dbManager->flush()</code> which performs an automatic <code>ROLLBACK</code> on any active transaction. But it's better to handle it properly in the business code.
+        </div>
+      </div>
+    </details>
+  </div>
+
+<!-- ════════════════════════════════════════════
+     EXERCISE 5
+     ════════════════════════════════════════════ -->
+
+  <div class="exercise">
+    <div class="exercise-title">Exercise 5 — Design a worker-safe RateLimiter <span class="badge badge-advanced">Advanced</span></div>
+
+    <p>Design an in-memory RateLimiter that works correctly in worker mode with these constraints:</p>
+
+    <ul>
+      <li>In-memory storage (no Redis/DB) &mdash; acceptable for lightweight rate-limiting</li>
+      <li>Cleanup of expired entries to avoid memory leaks</li>
+      <li>Awareness that each thread has its own RateLimiter (no cross-thread sharing)</li>
+      <li>Configurable limit per IP: X requests per Y second window</li>
+    </ul>
+
+    <p><strong>Question:</strong> Implement the complete class with <code>hit()</code>, <code>isAllowed()</code>, and <code>cleanup()</code> methods.</p>
+
+    <details>
+      <summary>See the complete solution</summary>
+      <div class="details-body">
+<pre><code><span class="keyword">class</span> <span class="type">WorkerRateLimiter</span>
+{
+    <span class="comment">/** @var array&lt;string, array{count: int, window_start: float}&gt; */</span>
+    <span class="keyword">private</span> <span class="type">array</span> <span class="variable">$hits</span> = [];
+    <span class="keyword">private</span> <span class="type">int</span> <span class="variable">$lastCleanup</span> = <span class="number">0</span>;
+
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">private readonly</span> <span class="type">int</span> <span class="variable">$maxRequests</span> = <span class="number">60</span>,
+        <span class="keyword">private readonly</span> <span class="type">int</span> <span class="variable">$windowSeconds</span> = <span class="number">60</span>,
+        <span class="keyword">private readonly</span> <span class="type">int</span> <span class="variable">$cleanupEvery</span> = <span class="number">100</span>,  <span class="comment">// Clean every N requests</span>
+        <span class="keyword">private readonly</span> <span class="type">int</span> <span class="variable">$maxEntries</span> = <span class="number">10000</span>,  <span class="comment">// Absolute entry limit</span>
+    ) {}
+
+    <span class="comment">/**
+     * Record a hit and return true if the request is allowed.
+     */</span>
+    <span class="keyword">public function</span> <span class="function">hit</span>(<span class="type">string</span> <span class="variable">$ip</span>): <span class="type">bool</span>
+    {
+        <span class="variable">$now</span> = <span class="function">time</span>();
+        <span class="variable">$this</span>-><span class="function">maybeCleanup</span>(<span class="variable">$now</span>);
+
+        <span class="keyword">if</span> (!<span class="keyword">isset</span>(<span class="variable">$this</span>-><span class="variable">hits</span>[<span class="variable">$ip</span>])) {
+            <span class="variable">$this</span>-><span class="variable">hits</span>[<span class="variable">$ip</span>] = [
+                <span class="string">'count'</span>        => <span class="number">0</span>,
+                <span class="string">'window_start'</span> => <span class="variable">$now</span>,
+            ];
+        }
+
+        <span class="variable">$entry</span> = &<span class="variable">$this</span>-><span class="variable">hits</span>[<span class="variable">$ip</span>];
+
+        <span class="comment">// Window expired? Reset</span>
+        <span class="keyword">if</span> ((<span class="variable">$now</span> - <span class="variable">$entry</span>[<span class="string">'window_start'</span>]) >= <span class="variable">$this</span>-><span class="variable">windowSeconds</span>) {
+            <span class="variable">$entry</span>[<span class="string">'count'</span>] = <span class="number">0</span>;
+            <span class="variable">$entry</span>[<span class="string">'window_start'</span>] = <span class="variable">$now</span>;
+        }
+
+        <span class="variable">$entry</span>[<span class="string">'count'</span>]++;
+
+        <span class="keyword">return</span> <span class="variable">$entry</span>[<span class="string">'count'</span>] <= <span class="variable">$this</span>-><span class="variable">maxRequests</span>;
+    }
+
+    <span class="comment">/**
+     * Check without incrementing.
+     */</span>
+    <span class="keyword">public function</span> <span class="function">isAllowed</span>(<span class="type">string</span> <span class="variable">$ip</span>): <span class="type">bool</span>
+    {
+        <span class="keyword">if</span> (!<span class="keyword">isset</span>(<span class="variable">$this</span>-><span class="variable">hits</span>[<span class="variable">$ip</span>])) {
+            <span class="keyword">return</span> <span class="keyword">true</span>;
+        }
+
+        <span class="variable">$entry</span> = <span class="variable">$this</span>-><span class="variable">hits</span>[<span class="variable">$ip</span>];
+        <span class="variable">$now</span> = <span class="function">time</span>();
+
+        <span class="keyword">if</span> ((<span class="variable">$now</span> - <span class="variable">$entry</span>[<span class="string">'window_start'</span>]) >= <span class="variable">$this</span>-><span class="variable">windowSeconds</span>) {
+            <span class="keyword">return</span> <span class="keyword">true</span>;  <span class="comment">// Window expired</span>
+        }
+
+        <span class="keyword">return</span> <span class="variable">$entry</span>[<span class="string">'count'</span>] < <span class="variable">$this</span>-><span class="variable">maxRequests</span>;
+    }
+
+    <span class="comment">/**
+     * Remove expired entries to prevent memory leaks.
+     */</span>
+    <span class="keyword">public function</span> <span class="function">cleanup</span>(<span class="type">int</span> <span class="variable">$now</span>): <span class="type">void</span>
+    {
+        <span class="keyword">foreach</span> (<span class="variable">$this</span>-><span class="variable">hits</span> <span class="keyword">as</span> <span class="variable">$ip</span> => <span class="variable">$entry</span>) {
+            <span class="keyword">if</span> ((<span class="variable">$now</span> - <span class="variable">$entry</span>[<span class="string">'window_start'</span>]) >= <span class="variable">$this</span>-><span class="variable">windowSeconds</span>) {
+                <span class="keyword">unset</span>(<span class="variable">$this</span>-><span class="variable">hits</span>[<span class="variable">$ip</span>]);
+            }
+        }
+
+        <span class="comment">// Ultimate protection against memory leaks</span>
+        <span class="keyword">if</span> (<span class="function">count</span>(<span class="variable">$this</span>-><span class="variable">hits</span>) > <span class="variable">$this</span>-><span class="variable">maxEntries</span>) {
+            <span class="variable">$this</span>-><span class="variable">hits</span> = <span class="function">array_slice</span>(<span class="variable">$this</span>-><span class="variable">hits</span>, -<span class="variable">$this</span>-><span class="variable">maxEntries</span>, preserve_keys: <span class="keyword">true</span>);
+        }
+
+        <span class="variable">$this</span>-><span class="variable">lastCleanup</span> = <span class="variable">$now</span>;
+    }
+
+    <span class="keyword">private function</span> <span class="function">maybeCleanup</span>(<span class="type">int</span> <span class="variable">$now</span>): <span class="type">void</span>
+    {
+        <span class="keyword">if</span> ((<span class="variable">$now</span> - <span class="variable">$this</span>-><span class="variable">lastCleanup</span>) >= <span class="variable">$this</span>-><span class="variable">cleanupEvery</span>) {
+            <span class="variable">$this</span>-><span class="function">cleanup</span>(<span class="variable">$now</span>);
+        }
+    }
+
+    <span class="keyword">public function</span> <span class="function">getStats</span>(): <span class="type">array</span>
+    {
+        <span class="keyword">return</span> [
+            <span class="string">'tracked_ips'</span> => <span class="function">count</span>(<span class="variable">$this</span>-><span class="variable">hits</span>),
+            <span class="string">'memory'</span>      => <span class="function">memory_get_usage</span>(),
+        ];
+    }
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <strong>Limitations of in-memory rate-limiting</strong>
+          Each worker thread has its own instance. With 4 threads, an attacker can make <code>4 x maxRequests</code> requests per window. For strict rate-limiting, use Redis or a shared database.
+        </div>
+
+        <p><strong>Usage in the worker:</strong></p>
+<pre><code><span class="comment">// Created at boot, before the loop</span>
+<span class="variable">$limiter</span> = <span class="keyword">new</span> <span class="type">WorkerRateLimiter</span>(maxRequests: <span class="number">60</span>, windowSeconds: <span class="number">60</span>);
+
+<span class="comment">// In the handler</span>
+<span class="variable">$ip</span> = <span class="variable">$_SERVER</span>[<span class="string">'REMOTE_ADDR'</span>];
+<span class="keyword">if</span> (!<span class="variable">$limiter</span>-><span class="function">hit</span>(<span class="variable">$ip</span>)) {
+    <span class="function">http_response_code</span>(<span class="number">429</span>);
+    <span class="keyword">echo</span> <span class="function">json_encode</span>([<span class="string">'error'</span> => <span class="string">'Too many requests'</span>]);
+    <span class="keyword">return</span>;
+}</code></pre>
+      </div>
+    </details>
+  </div>
+
+<!-- ════════════════════════════════════════════
+     EXERCISE 6
+     ════════════════════════════════════════════ -->
+
+  <div class="exercise">
+    <div class="exercise-title">Exercise 6 — Identify safe/unsafe elements <span class="badge badge-beginner">Beginner</span></div>
+
+    <p>For each of the following 10 patterns, indicate whether it is <strong>safe</strong> (no risk) or <strong>unsafe</strong> (dangerous) in worker mode. Justify.</p>
+
+    <table>
+      <thead>
+        <tr><th>#</th><th>Code pattern</th><th>Safe?</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td><code>$router = new Router();</code> created at boot</td><td>???</td></tr>
+        <tr><td>2</td><td><code>static $currentUser = null;</code> set by middleware</td><td>???</td></tr>
+        <tr><td>3</td><td><code>$_SERVER['REMOTE_ADDR']</code> read in the handler</td><td>???</td></tr>
+        <tr><td>4</td><td><code>Event::listen('user.created', ...)</code> in a controller</td><td>???</td></tr>
+        <tr><td>5</td><td><code>new PDO(...)</code> created at boot, reused between requests</td><td>???</td></tr>
+        <tr><td>6</td><td><code>file_get_contents('config.json')</code> on each request</td><td>???</td></tr>
+        <tr><td>7</td><td><code>exit(1)</code> in a fatal error catch</td><td>???</td></tr>
+        <tr><td>8</td><td><code>static $cache = [];</code> to cache DB queries</td><td>???</td></tr>
+        <tr><td>9</td><td><code>header('Content-Type: application/json')</code> before echo</td><td>???</td></tr>
+        <tr><td>10</td><td><code>$container->get(Logger::class)</code> container singleton</td><td>???</td></tr>
+      </tbody>
+    </table>
+
+    <details>
+      <summary>See the answers</summary>
+      <div class="details-body">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Pattern</th><th>Verdict</th><th>Explanation</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td><code>$router = new Router();</code> at boot</td><td><span class="badge badge-safe">SAFE</span></td><td>Created once, immutable, shared between requests. This is the recommended pattern.</td></tr>
+            <tr><td>2</td><td><code>static $currentUser</code></td><td><span class="badge badge-critical">UNSAFE</span></td><td>Identity leak between requests. Request 1's user is visible in request 2.</td></tr>
+            <tr><td>3</td><td><code>$_SERVER['REMOTE_ADDR']</code></td><td><span class="badge badge-safe">SAFE</span></td><td>Reset by FrankenPHP on each <code>frankenphp_handle_request()</code>.</td></tr>
+            <tr><td>4</td><td><code>Event::listen()</code> in controller</td><td><span class="badge badge-critical">UNSAFE</span></td><td>Listeners accumulate. Request 100 = 100 identical listeners.</td></tr>
+            <tr><td>5</td><td><code>new PDO()</code> at boot</td><td><span class="badge badge-warning">DEPENDS</span></td><td>Safe if the connection is monitored (timeout, reconnection). Risky if the connection dies without detection.</td></tr>
+            <tr><td>6</td><td><code>file_get_contents('config.json')</code></td><td><span class="badge badge-warning">DEPENDS</span></td><td>Safe but inefficient: disk I/O on each request. Better: load at boot and cache in memory.</td></tr>
+            <tr><td>7</td><td><code>exit(1)</code></td><td><span class="badge badge-critical">UNSAFE</span></td><td>Kills the entire worker. All subsequent requests fail until restart.</td></tr>
+            <tr><td>8</td><td><code>static $cache = [];</code></td><td><span class="badge badge-warning">DEPENDS</span></td><td>Safe if size is limited and data is non-sensitive. Unsafe if cache grows indefinitely (memory leak).</td></tr>
+            <tr><td>9</td><td><code>header()</code> before echo</td><td><span class="badge badge-safe">SAFE</span></td><td>Correct. FrankenPHP sends headers at the end of the handler.</td></tr>
+            <tr><td>10</td><td><code>$container->get(Logger::class)</code></td><td><span class="badge badge-safe">SAFE</span></td><td>Container singletons are designed to be shared. The Logger is stateless.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+
+</section>
+
+<!-- ════════════════════════════════════════════
+     CHECKLIST WORKER-READY
+     ════════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Worker-Ready Checklist</h2>
+
+  <p>Before deploying in worker mode, verify each item:</p>
+
+  <ul class="checklist">
+    <li>No <code>exit()</code> or <code>die()</code> in application code</li>
+    <li>No <code>static</code> property containing request data (user, session, token)</li>
+    <li>No <code>Event::listen()</code> called in a controller or per-request middleware</li>
+    <li>All DB transactions are wrapped with <code>try/catch</code> or <code>DB::transaction()</code></li>
+    <li>The worker cleanup removes manually added data from <code>$_REQUEST</code></li>
+    <li>PDO connections are closed or rolled back via <code>flush()</code> after each request</li>
+    <li>Static arrays used as cache have a defined maximum size</li>
+    <li>The garbage collector is called periodically (<code>gc_collect_cycles()</code>)</li>
+    <li>Configuration files are loaded at boot, not on each request</li>
+    <li>HTTP headers are set before any <code>echo</code> in the handler</li>
+    <li>Container singletons are stateless or properly reinitialized</li>
+    <li>Tests pass in worker mode (not just in PHP-FPM)</li>
+  </ul>
+</section>
+
+<!-- ════════════════════════════════════════════
+     PAGINATION
+     ════════════════════════════════════════════ -->
+
+<div class="pagination">
+  <a href="03-memory.html" class="prev">Memory &amp; Leaks</a>
+  <a href="05-routing.html" class="next">Routing &amp; Middleware</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

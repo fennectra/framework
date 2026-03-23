@@ -1,0 +1,40 @@
+FROM dunglas/frankenphp:latest-php8.3
+
+# PHP extensions
+RUN apt-get update && apt-get install -y git unzip && rm -rf /var/lib/apt/lists/*
+RUN install-php-extensions pdo_pgsql pdo_mysql pdo_sqlite gd
+
+# PHP production settings
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+
+# Install dependencies first (Docker cache layer)
+COPY composer.json composer.lock* ./
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Copy application code
+COPY app ./app
+COPY public ./public
+COPY database ./database
+COPY .env.example ./.env
+
+# Caddyfile from framework vendor
+RUN cp vendor/fennectra/framework/docker/Caddyfile /etc/caddy/Caddyfile
+
+# Create runtime directories
+RUN mkdir -p var/logs var/cache var/lockout storage \
+    && ln -sf /app/storage /app/public/storage \
+    && chown -R www-data:www-data /app
+
+ENV FENNEC_BASE_PATH=/app
+ENV PORT=8080
+
+EXPOSE 8080
+
+# FrankenPHP worker mode — boot once, serve forever
+# index.php detects worker mode via FRANKENPHP_WORKER env var
+CMD ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]

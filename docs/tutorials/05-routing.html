@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 — Routing &amp; Middleware</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Routing &amp; Middleware</h1>
+  <p>The framework HTTP layer: routes, middleware pipeline, request/response &amp; auto-generated API docs</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 05 &mdash; Routing</div>
+
+<!-- ───────────────────────── 1. Defining Routes ───────────────────────── -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Defining Routes <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The <code>Router</code> exposes four HTTP-verb methods: <code>get()</code>, <code>post()</code>, <code>put()</code>, and <code>delete()</code>. Each takes a path, a controller/action pair, and optional per-route middleware.</p>
+
+  <p>Route files live in <code>app/Routes/</code> and are auto-loaded at boot time. Dynamic segments use the <code>{param}</code> syntax &mdash; the value is injected into the controller method parameter with the matching name.</p>
+
+<pre><code><span class="variable">$router</span>-><span class="function">get</span>(<span class="string">'/users'</span>, [<span class="type">UserController</span>::<span class="keyword">class</span>, <span class="string">'index'</span>]);
+<span class="variable">$router</span>-><span class="function">post</span>(<span class="string">'/users'</span>, [<span class="type">UserController</span>::<span class="keyword">class</span>, <span class="string">'store'</span>]);
+<span class="variable">$router</span>-><span class="function">put</span>(<span class="string">'/users/{id}'</span>, [<span class="type">UserController</span>::<span class="keyword">class</span>, <span class="string">'update'</span>]);
+<span class="variable">$router</span>-><span class="function">delete</span>(<span class="string">'/users/{id}'</span>, [<span class="type">UserController</span>::<span class="keyword">class</span>, <span class="string">'delete'</span>]);</code></pre>
+
+  <div class="callout callout-info">
+    <strong>Dynamic parameters</strong> &mdash; <code>{id}</code> in the path becomes the regex group <code>(?P&lt;id&gt;[^/]+)</code>. The router matches the named group and passes it to the controller method whose parameter is named <code>$id</code>.
+  </div>
+</section>
+
+<!-- ───────────────────────── 2. Route Groups ───────────────────────── -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Route Groups <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>Groups let you share a <strong>prefix</strong>, <strong>middleware</strong>, and <strong>description</strong> across several routes. Groups can be nested &mdash; prefixes and middleware accumulate, and the previous state is restored when the group callback ends.</p>
+
+<pre><code><span class="variable">$router</span>-><span class="function">group</span>([
+    <span class="string">'prefix'</span>      => <span class="string">'/admin'</span>,
+    <span class="string">'middleware'</span>  => [[<span class="type">Auth</span>::<span class="keyword">class</span>, [<span class="string">'admin'</span>]]],
+    <span class="string">'description'</span> => <span class="string">'Administration'</span>,
+], <span class="keyword">function</span> (<span class="variable">$router</span>) {
+    <span class="variable">$router</span>-><span class="function">get</span>(<span class="string">'/users'</span>, [<span class="type">AdminController</span>::<span class="keyword">class</span>, <span class="string">'listUsers'</span>]);
+});</code></pre>
+
+  <p>The route above resolves to <code>GET /admin/users</code> with the <code>Auth</code> middleware requiring the <code>admin</code> role.</p>
+
+  <details>
+    <summary>How nesting works internally</summary>
+    <div class="details-body">
+      <p>Before entering the callback, the router saves the current <code>groupPrefix</code>, <code>groupMiddleware</code>, and <code>groupDescription</code>. Inside the callback the new values are merged. Once the callback finishes, the previous values are restored &mdash; this makes nested groups safe.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ───────────────────────── 3. Middleware ───────────────────────── -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> Middleware <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>Middleware intercept the request before (and after) it reaches the controller. Every middleware implements <code>MiddlewareInterface</code> with a single <code>handle(Request, callable $next)</code> method.</p>
+
+<pre><code><span class="keyword">class</span> <span class="type">RateLimitMiddleware</span> <span class="keyword">implements</span> <span class="type">MiddlewareInterface</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">Request</span> <span class="variable">$request</span>, <span class="keyword">callable</span> <span class="variable">$next</span>): <span class="type">mixed</span>
+    {
+        <span class="comment">// Check rate limit before proceeding...</span>
+        <span class="keyword">if</span> (<span class="variable">$this</span>-><span class="function">isRateLimited</span>(<span class="variable">$request</span>)) {
+            <span class="keyword">throw new</span> <span class="type">HttpException</span>(<span class="number">429</span>, <span class="string">'Too Many Requests'</span>);
+        }
+
+        <span class="keyword">return</span> <span class="variable">$next</span>(<span class="variable">$request</span>);
+    }
+}</code></pre>
+
+  <h3>Pipeline execution</h3>
+
+  <p>The <code>MiddlewarePipeline</code> wraps middleware in an onion-style chain. Global middleware run first, then per-route middleware, and finally the controller action as the core handler.</p>
+
+  <div class="diagram">
+Request
+  │
+  ▼
+┌─────────────────────────────────┐
+│  Global Middleware (CORS, etc.) │
+│  ┌───────────────────────────┐  │
+│  │  Route Middleware (Auth)  │  │
+│  │  ┌─────────────────────┐  │  │
+│  │  │  Controller::action  │  │  │
+│  │  └─────────────────────┘  │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+  │
+  ▼
+Response
+  </div>
+
+  <h3>Global vs per-route middleware</h3>
+
+  <table>
+    <thead><tr><th>Type</th><th>Registration</th><th>Runs on</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Global</td>
+        <td><code>$router->addGlobalMiddleware(CorsMiddleware::class)</code></td>
+        <td>Every request</td>
+      </tr>
+      <tr>
+        <td>Per-route</td>
+        <td>Third argument of <code>get()</code>/<code>post()</code>/etc., or via <code>group()</code></td>
+        <td>Only matching routes</td>
+      </tr>
+    </tbody>
+  </table>
+
+<pre><code><span class="comment">// Global middleware &mdash; registered once at boot</span>
+<span class="variable">$router</span>-><span class="function">addGlobalMiddleware</span>(<span class="type">CorsMiddleware</span>::<span class="keyword">class</span>);
+
+<span class="comment">// Per-route middleware &mdash; only on this specific route</span>
+<span class="variable">$router</span>-><span class="function">post</span>(<span class="string">'/payments'</span>, [<span class="type">PaymentController</span>::<span class="keyword">class</span>, <span class="string">'charge'</span>], [
+    [<span class="type">Auth</span>::<span class="keyword">class</span>, [<span class="string">'admin'</span>]],
+    [<span class="type">RateLimitMiddleware</span>::<span class="keyword">class</span>],
+]);</code></pre>
+</section>
+
+<!-- ───────────────────────── 4. Request Object ───────────────────────── -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Request Object <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The <code>Request</code> class wraps the incoming HTTP data. It is created by the router and passed through the middleware pipeline.</p>
+
+  <table>
+    <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>getMethod()</code></td><td><code>string</code></td><td>HTTP verb: GET, POST, PUT, DELETE</td></tr>
+      <tr><td><code>getUri()</code></td><td><code>string</code></td><td>Request path (e.g. <code>/users/42</code>)</td></tr>
+      <tr><td><code>getBody()</code></td><td><code>?array</code></td><td>Parsed JSON body from <code>php://input</code></td></tr>
+      <tr><td><code>getQuery($key, $default)</code></td><td><code>mixed</code></td><td>Query string params (<code>$_GET</code>). Pass <code>null</code> for all.</td></tr>
+      <tr><td><code>getHeader($name)</code></td><td><code>?string</code></td><td>HTTP header value (e.g. <code>'Authorization'</code>)</td></tr>
+      <tr><td><code>getServer($key, $default)</code></td><td><code>mixed</code></td><td>Access <code>$_SERVER</code> values</td></tr>
+      <tr><td><code>withAttribute($key, $val)</code></td><td><code>Request</code></td><td>Returns a <strong>clone</strong> with the attribute set</td></tr>
+      <tr><td><code>getAttribute($key, $default)</code></td><td><code>mixed</code></td><td>Retrieve a custom attribute</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <strong>Immutable attributes</strong> &mdash; <code>withAttribute()</code> returns a <em>clone</em> of the Request. The original is never mutated. This is essential for passing data between middleware safely (e.g. the authenticated user).
+  </div>
+
+<pre><code><span class="comment">// Inside a middleware</span>
+<span class="variable">$request</span> = <span class="variable">$request</span>-><span class="function">withAttribute</span>(<span class="string">'auth_user'</span>, <span class="variable">$user</span>);
+<span class="keyword">return</span> <span class="variable">$next</span>(<span class="variable">$request</span>);
+
+<span class="comment">// Inside a controller (via $_REQUEST or attribute)</span>
+<span class="variable">$token</span> = <span class="variable">$request</span>-><span class="function">getHeader</span>(<span class="string">'Authorization'</span>);
+<span class="variable">$page</span>  = <span class="variable">$request</span>-><span class="function">getQuery</span>(<span class="string">'page'</span>, <span class="number">1</span>);</code></pre>
+</section>
+
+<!-- ───────────────────────── 5. Response Handling ───────────────────────── -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">5</span> Response Handling <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>Controller methods simply <strong>return</strong> a value. The router handles serialization automatically:</p>
+
+  <table>
+    <thead><tr><th>Return type</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td><code>array</code></td><td>Serialized to JSON via <code>Response::json()</code></td></tr>
+      <tr><td><code>object</code></td><td>Public properties extracted, then JSON</td></tr>
+      <tr><td><code>null</code></td><td>No response body sent (headers only)</td></tr>
+    </tbody>
+  </table>
+
+<pre><code><span class="comment">// Returning an array &rarr; auto JSON response</span>
+<span class="keyword">public function</span> <span class="function">index</span>(): <span class="type">array</span>
+{
+    <span class="keyword">return</span> [<span class="string">'users'</span> => <span class="type">User</span>::<span class="function">all</span>()];
+}
+
+<span class="comment">// Throwing HttpException &rarr; structured error response</span>
+<span class="keyword">public function</span> <span class="function">show</span>(<span class="type">string</span> <span class="variable">$id</span>): <span class="type">array</span>
+{
+    <span class="variable">$user</span> = <span class="type">User</span>::<span class="function">find</span>(<span class="variable">$id</span>);
+    <span class="keyword">if</span> (!<span class="variable">$user</span>) {
+        <span class="keyword">throw new</span> <span class="type">HttpException</span>(<span class="number">404</span>, <span class="string">'User not found'</span>);
+    }
+    <span class="keyword">return</span> <span class="variable">$user</span>;
+}</code></pre>
+
+  <div class="callout callout-danger">
+    <strong>Never use <code>exit()</code> or <code>die()</code></strong> to end a response. Throw an <code>HttpException</code> instead &mdash; the framework catches it, sets the correct status code, and keeps the worker alive.
+  </div>
+</section>
+
+<!-- ───────────────────────── 6. OpenAPI Auto-Docs ───────────────────────── -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">6</span> OpenAPI Auto-Docs <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The framework automatically generates an OpenAPI specification from your routes and PHP 8 attributes. No manual YAML required.</p>
+
+  <h3>Documenting your endpoints</h3>
+
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Attributes\ApiDescription</span>;
+<span class="keyword">use</span> <span class="type">Framework\Attributes\ApiStatus</span>;
+
+<span class="attribute">#[ApiDescription(</span>
+    <span class="string">'List all users'</span>,
+    <span class="string">'Returns a paginated list of active users.'</span>
+<span class="attribute">)]</span>
+<span class="attribute">#[ApiStatus(<span class="number">200</span>, <span class="string">'Successful response'</span>)]</span>
+<span class="attribute">#[ApiStatus(<span class="number">401</span>, <span class="string">'Unauthorized'</span>)]</span>
+<span class="keyword">public function</span> <span class="function">index</span>(): <span class="type">array</span>
+{
+    <span class="keyword">return</span> <span class="type">User</span>::<span class="function">all</span>();
+}</code></pre>
+
+  <table>
+    <thead><tr><th>Attribute</th><th>Target</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>#[ApiDescription(summary, description)]</code></td><td>Method</td><td>Endpoint summary &amp; detailed description</td></tr>
+      <tr><td><code>#[ApiStatus(code, description)]</code></td><td>Method (repeatable)</td><td>Document possible HTTP response codes</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Accessing the docs</h3>
+
+  <p>Two built-in endpoints are registered by the <code>DocsController</code>:</p>
+
+  <table>
+    <thead><tr><th>URL</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>/docs</code></td><td>Interactive <strong>Scalar UI</strong> for browsing and testing the API</td></tr>
+      <tr><td><code>/docs/openapi</code></td><td>Raw OpenAPI JSON specification</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <strong>Scalar UI</strong> is loaded from CDN and reads the <code>/docs/openapi</code> endpoint. Route descriptions, DTO schemas, and status codes are all generated automatically from your code.
+  </div>
+</section>
+
+<!-- ───────────────────────── Exercises ───────────────────────── -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">&#9998;</span> Exercise 1 <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p><strong>Create a route group for <code>/api/v2</code> with auth middleware.</strong></p>
+
+  <p>Define a group that prefixes all routes with <code>/api/v2</code>, applies the <code>Auth</code> middleware (requiring the <code>user</code> role), and contains at least two routes.</p>
+
+  <details>
+    <summary>Solution</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">App\Middleware\Auth</span>;
+<span class="keyword">use</span> <span class="type">App\Controllers\ProductController</span>;
+<span class="keyword">use</span> <span class="type">App\Controllers\OrderController</span>;
+
+<span class="variable">$router</span>-><span class="function">group</span>([
+    <span class="string">'prefix'</span>      => <span class="string">'/api/v2'</span>,
+    <span class="string">'middleware'</span>  => [[<span class="type">Auth</span>::<span class="keyword">class</span>, [<span class="string">'user'</span>]]],
+    <span class="string">'description'</span> => <span class="string">'API v2'</span>,
+], <span class="keyword">function</span> (<span class="variable">$router</span>) {
+    <span class="variable">$router</span>-><span class="function">get</span>(<span class="string">'/products'</span>, [<span class="type">ProductController</span>::<span class="keyword">class</span>, <span class="string">'index'</span>]);
+    <span class="variable">$router</span>-><span class="function">get</span>(<span class="string">'/products/{id}'</span>, [<span class="type">ProductController</span>::<span class="keyword">class</span>, <span class="string">'show'</span>]);
+    <span class="variable">$router</span>-><span class="function">post</span>(<span class="string">'/orders'</span>, [<span class="type">OrderController</span>::<span class="keyword">class</span>, <span class="string">'store'</span>]);
+});</code></pre>
+      <p>This produces routes <code>GET /api/v2/products</code>, <code>GET /api/v2/products/{id}</code>, and <code>POST /api/v2/orders</code> &mdash; all protected by <code>Auth</code> middleware with the <code>user</code> role.</p>
+    </div>
+  </details>
+</section>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">&#9998;</span> Exercise 2 <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p><strong>Create a custom <code>LoggingMiddleware</code> that logs request duration.</strong></p>
+
+  <p>Implement <code>MiddlewareInterface</code>. Record <code>microtime(true)</code> before calling <code>$next</code>, then compute the elapsed time and log it with the HTTP method and URI.</p>
+
+  <details>
+    <summary>Solution</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Middleware</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Core\MiddlewareInterface</span>;
+<span class="keyword">use</span> <span class="type">Framework\Core\Request</span>;
+
+<span class="keyword">class</span> <span class="type">LoggingMiddleware</span> <span class="keyword">implements</span> <span class="type">MiddlewareInterface</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">Request</span> <span class="variable">$request</span>, <span class="keyword">callable</span> <span class="variable">$next</span>): <span class="type">mixed</span>
+    {
+        <span class="variable">$start</span> = <span class="function">microtime</span>(<span class="keyword">true</span>);
+
+        <span class="variable">$result</span> = <span class="variable">$next</span>(<span class="variable">$request</span>);
+
+        <span class="variable">$duration</span> = <span class="function">round</span>((<span class="function">microtime</span>(<span class="keyword">true</span>) - <span class="variable">$start</span>) * <span class="number">1000</span>, <span class="number">2</span>);
+
+        <span class="function">error_log</span>(<span class="function">sprintf</span>(
+            <span class="string">'[%s] %s %s &mdash; %sms'</span>,
+            <span class="function">date</span>(<span class="string">'Y-m-d H:i:s'</span>),
+            <span class="variable">$request</span>-><span class="function">getMethod</span>(),
+            <span class="variable">$request</span>-><span class="function">getUri</span>(),
+            <span class="variable">$duration</span>
+        ));
+
+        <span class="keyword">return</span> <span class="variable">$result</span>;
+    }
+}</code></pre>
+      <p>Register it globally with <code>$router->addGlobalMiddleware(LoggingMiddleware::class)</code> or attach it to specific route groups.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ───────────────────────── Pagination ───────────────────────── -->
+
+<div class="pagination">
+  <a href="04-exercises.html" class="prev">Exercises</a>
+  <a href="06-orm.html" class="next">ORM</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>
