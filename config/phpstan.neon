@@ -1,0 +1,30 @@
+parameters:
+    level: 5
+    paths:
+        - ../src
+    scanFiles:
+        - ../src/stubs.php
+    excludePaths:
+        - ../src/stubs.php
+    ignoreErrors:
+        -
+            identifier: notIdentical.alwaysTrue
+            path: ../src/Core/DatabaseManager.php
+        -
+            identifier: nullCoalesce.offset
+            path: ../src/Core/ErrorHandler.php
+        -
+            identifier: trait.unused
+        -
+            identifier: nullCoalesce.offset
+            path: ../src/Core/OAuth/Providers/GitHubProvider.php
+        -
+            identifier: identical.alwaysTrue
+        -
+            identifier: class.notFound
+            path: ../src/Controllers/DocsController.php
+        -
+            identifier: class.notFound
+            path: ../src/Middleware/AuthMiddleware.php
+        -
+            identifier: match.unhandled

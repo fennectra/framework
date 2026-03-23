@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>12 — Notifications, SSE & OAuth</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Notifications, SSE &amp; OAuth</h1>
+  <p>Multi-channel notifications, real-time and social authentication</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 12 &mdash; Notifications, SSE &amp; OAuth</div>
+
+<!-- ═══════════════════════════════════════════
+     1. Notifications Multi-Canal
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Notifications Multi-Canal <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The notification system allows sending messages through multiple channels simultaneously: database, email (SMTP), and Slack (webhook). Each notification defines its channels and content for each.</p>
+
+  <details open>
+    <summary>Create a notification</summary>
+    <div class="details-body">
+      <p>A notification implements <code>NotificationInterface</code> and defines its channels via <code>via()</code>:</p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Notifications</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Notification\NotificationInterface</span>;
+<span class="keyword">use</span> <span class="type">Framework\Notification\MailMessage</span>;
+<span class="keyword">use</span> <span class="type">Framework\Notification\SlackMessage</span>;
+
+<span class="keyword">class</span> <span class="type">OrderShipped</span> <span class="keyword">implements</span> <span class="type">NotificationInterface</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">private</span> <span class="type">array</span> <span class="variable">$order</span>
+    ) {}
+
+    <span class="comment">// Channels used for this notification</span>
+    <span class="keyword">public function</span> <span class="function">via</span>(): <span class="type">array</span>
+    {
+        <span class="keyword">return</span> [<span class="string">'database'</span>, <span class="string">'mail'</span>, <span class="string">'slack'</span>];
+    }
+
+    <span class="comment">// Content stored in database</span>
+    <span class="keyword">public function</span> <span class="function">toDatabase</span>(): <span class="type">array</span>
+    {
+        <span class="keyword">return</span> [
+            <span class="string">'title'</span> => <span class="string">'Order shipped'</span>,
+            <span class="string">'body'</span>  => <span class="string">"Your order #</span><span class="variable">{$this->order['id']}</span><span class="string"> has been shipped."</span>,
+            <span class="string">'url'</span>   => <span class="string">"/orders/</span><span class="variable">{$this->order['id']}</span><span class="string">"</span>,
+        ];
+    }
+
+    <span class="comment">// Email content (fluent API)</span>
+    <span class="keyword">public function</span> <span class="function">toMail</span>(): <span class="type">MailMessage</span>
+    {
+        <span class="keyword">return</span> (<span class="keyword">new</span> <span class="type">MailMessage</span>)
+            -><span class="function">subject</span>(<span class="string">'Order shipped'</span>)
+            -><span class="function">line</span>(<span class="string">"Your order #</span><span class="variable">{$this->order['id']}</span><span class="string"> is on its way."</span>)
+            -><span class="function">action</span>(<span class="string">'Track delivery'</span>, <span class="string">"https://app.example.com/orders/</span><span class="variable">{$this->order['id']}</span><span class="string">"</span>)
+            -><span class="function">line</span>(<span class="string">'Thank you for your trust!'</span>);
+    }
+
+    <span class="comment">// Slack message (fluent API)</span>
+    <span class="keyword">public function</span> <span class="function">toSlack</span>(): <span class="type">SlackMessage</span>
+    {
+        <span class="keyword">return</span> (<span class="keyword">new</span> <span class="type">SlackMessage</span>)
+            -><span class="function">to</span>(<span class="string">'#orders'</span>)
+            -><span class="function">text</span>(<span class="string">"Order #</span><span class="variable">{$this->order['id']}</span><span class="string"> shipped to </span><span class="variable">{$this->order['customer']}</span><span class="string">"</span>)
+            -><span class="function">emoji</span>(<span class="string">':package:'</span>);
+    }
+}</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Available channels</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Channel</th><th>Class</th><th>Transport</th><th>Configuration</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>database</code></td>
+            <td><code>DatabaseChannel</code></td>
+            <td>Table <code>notifications</code></td>
+            <td>None (table auto-created)</td>
+          </tr>
+          <tr>
+            <td><code>mail</code></td>
+            <td><code>MailChannel</code></td>
+            <td>SMTP</td>
+            <td><code>MAIL_HOST</code>, <code>MAIL_PORT</code>, <code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code></td>
+          </tr>
+          <tr>
+            <td><code>slack</code></td>
+            <td><code>SlackChannel</code></td>
+            <td>Webhook HTTP</td>
+            <td><code>SLACK_WEBHOOK_URL</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Send and read notifications</summary>
+    <div class="details-body">
+      <p>Use the <code>HasNotifications</code> trait on your User model:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Notification\HasNotifications</span>;
+
+<span class="keyword">class</span> <span class="type">User</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">use</span> <span class="type">HasNotifications</span>;
+}
+
+<span class="comment">// Send a notification</span>
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">find</span>(<span class="number">1</span>);
+<span class="variable">$user</span>-><span class="function">notify</span>(<span class="keyword">new</span> <span class="type">OrderShipped</span>(<span class="variable">$order</span>));
+
+<span class="comment">// Read unread notifications</span>
+<span class="variable">$unread</span> = <span class="variable">$user</span>-><span class="function">unreadNotifications</span>();
+
+<span class="comment">// Mark as read</span>
+<span class="variable">$user</span>-><span class="function">markNotificationAsRead</span>(<span class="variable">$notificationId</span>);
+
+<span class="comment">// All notifications (read + unread)</span>
+<span class="variable">$all</span> = <span class="variable">$user</span>-><span class="function">notifications</span>();</code></pre>
+      <div class="callout callout-info">
+        <strong>Async sending.</strong>
+        Email and Slack sending can be deferred by combining with the Job Queue: the notification is saved to DB immediately, then an async job handles SMTP and Slack sending.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     2. Broadcasting SSE
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Broadcasting SSE <span class="badge badge-advanced">Advanced</span></h2>
+
+  <p>Broadcasting uses Server-Sent Events (SSE) to push real-time data to browser clients. Events are published via Redis and broadcast by a dedicated SSE endpoint.</p>
+
+  <details open>
+    <summary>Server-side: publish an event</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Broadcasting\Broadcaster</span>;
+
+<span class="comment">// Publish an event to a channel</span>
+<span class="type">Broadcaster</span>::<span class="function">broadcast</span>(<span class="string">'orders'</span>, <span class="string">'shipped'</span>, [
+    <span class="string">'order_id'</span> => <span class="number">42</span>,
+    <span class="string">'status'</span>   => <span class="string">'shipped'</span>,
+    <span class="string">'eta'</span>      => <span class="string">'2026-03-23'</span>,
+]);
+
+<span class="comment">// Publish to multiple channels</span>
+<span class="type">Broadcaster</span>::<span class="function">broadcast</span>([<span class="string">'orders'</span>, <span class="string">'admin'</span>], <span class="string">'order.updated'</span>, <span class="variable">$data</span>);</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Attribut #[Broadcast] sur les evenements</summary>
+    <div class="details-body">
+      <p>Annotez vos classes d'evenements pour qu'ils soient automatically diffuses :</p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Events</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Broadcasting\Broadcast</span>;
+
+#[<span class="type">Broadcast</span>(<span class="string">'orders'</span>)]
+<span class="keyword">class</span> <span class="type">OrderShipped</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        <span class="keyword">public readonly int</span> <span class="variable">$orderId</span>,
+        <span class="keyword">public readonly string</span> <span class="variable">$status</span> = <span class="string">'shipped'</span>,
+    ) {}
+
+    <span class="comment">// Data sent to the SSE client</span>
+    <span class="keyword">public function</span> <span class="function">broadcastWith</span>(): <span class="type">array</span>
+    {
+        <span class="keyword">return</span> [
+            <span class="string">'order_id'</span> => <span class="variable">$this</span>-><span class="variable">orderId</span>,
+            <span class="string">'status'</span>   => <span class="variable">$this</span>-><span class="variable">status</span>,
+        ];
+    }
+}</code></pre>
+      <div class="callout callout-info">
+        <strong>Publication automatique.</strong>
+        Quand un evenement annote <code>#[Broadcast]</code> est dispatche via <code>Event::dispatch()</code>, le Broadcaster le publie automatically sur le canal Redis indique.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>SSE Endpoint</summary>
+    <div class="details-body">
+      <p>The framework exposes a native SSE endpoint that listens to Redis channels and relays events to connected clients:</p>
+      <div class="diagram">
+<pre>
+Client JS                          Serveur SSE                         Redis
+    │                                  │                                 │
+    │  GET /events/stream?channels=    │                                 │
+    │      orders,notifications        │                                 │
+    │─────────────────────────────────►│                                 │
+    │                                  │  SUBSCRIBE orders               │
+    │                                  │  SUBSCRIBE notifications        │
+    │                                  │────────────────────────────────►│
+    │                                  │                                 │
+    │                                  │  heartbeat (every 15s)          │
+    │◄─────────── :ping ──────────────│                                 │
+    │                                  │                                 │
+    │                                  │  PUBLISH orders {event_data}    │
+    │                                  │◄────────────────────────────────│
+    │◄── data: {"order_id":42,...} ───│                                 │
+    │                                  │                                 │
+</pre>
+      </div>
+<pre><code><span class="comment">// The SSE endpoint sends a heartbeat every 15 seconds</span>
+<span class="comment">// to keep the connection alive:</span>
+<span class="comment">// : ping\n\n</span>
+
+<span class="comment">// SSE event format:</span>
+<span class="comment">// event: shipped</span>
+<span class="comment">// data: {"order_id":42,"status":"shipped","eta":"2026-03-23"}</span>
+<span class="comment">// \n</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Client-side: JavaScript</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Connect to the SSE stream with desired channels</span>
+<span class="keyword">const</span> <span class="variable">source</span> = <span class="keyword">new</span> <span class="type">EventSource</span>(<span class="string">'/events/stream?channels=orders,notifications'</span>);
+
+<span class="comment">// Listen for a specific event type</span>
+<span class="variable">source</span>.<span class="function">addEventListener</span>(<span class="string">'shipped'</span>, (<span class="variable">e</span>) => {
+    <span class="keyword">const</span> <span class="variable">data</span> = <span class="type">JSON</span>.<span class="function">parse</span>(<span class="variable">e</span>.<span class="variable">data</span>);
+    <span class="function">console</span>.<span class="function">log</span>(<span class="string">`Order #${<span class="variable">data</span>.<span class="variable">order_id</span>} shipped`</span>);
+});
+
+<span class="comment">// Ecouter tous les messages (evenement 'message' by default)</span>
+<span class="variable">source</span>.<span class="variable">onmessage</span> = (<span class="variable">e</span>) => {
+    <span class="function">console</span>.<span class="function">log</span>(<span class="string">'New event:'</span>, <span class="type">JSON</span>.<span class="function">parse</span>(<span class="variable">e</span>.<span class="variable">data</span>));
+};
+
+<span class="comment">// Error handling and automatic reconnection</span>
+<span class="variable">source</span>.<span class="variable">onerror</span> = (<span class="variable">e</span>) => {
+    <span class="function">console</span>.<span class="function">warn</span>(<span class="string">'SSE connection lost, reconnecting automatically...'</span>);
+};</code></pre>
+      <div class="callout callout-warning">
+        <strong>Reconnexion automatique.</strong>
+        Le navigateur reconnecte automatically le flux SSE en cas de coupure. Le serveur envoie un <code>Last-Event-ID</code> pour reprendre la ou le client s'est arrete, evitant la perte de messages.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     3. OAuth / Socialite
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> OAuth / Socialite <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The OAuth module allows connecting users via external providers (Google, GitHub). The OAuth2 flow is entirely managed by the framework: redirect, code exchange, account creation, and JWT generation.</p>
+
+  <details open>
+    <summary>Complete OAuth2 flow</summary>
+    <div class="details-body">
+      <div class="diagram">
+<pre>
+User          Application              Provider (Google/GitHub)
+     │                    │                            │
+     │  GET /auth/google/ │                            │
+     │    redirect        │                            │
+     │───────────────────►│                            │
+     │                    │  302 Redirect              │
+     │                    │  → accounts.google.com/    │
+     │                    │    o/oauth2/auth?           │
+     │                    │    client_id=...            │
+     │◄───────────────────│                            │
+     │                    │                            │
+     │  Google Login  │                            │
+     │───────────────────────────────────────────────►│
+     │                    │                            │
+     │  GET /auth/google/ │                            │
+     │    callback?code=  │                            │
+     │───────────────────►│                            │
+     │                    │  POST /oauth/token          │
+     │                    │  (exchange code → token)     │
+     │                    │───────────────────────────►│
+     │                    │◄───────────────────────────│
+     │                    │                            │
+     │                    │  GET /userinfo              │
+     │                    │───────────────────────────►│
+     │                    │◄───────────────────────────│
+     │                    │                            │
+     │  JWT + User info   │                            │
+     │◄───────────────────│                            │
+</pre>
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>OAuth Routes</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Redirect to the OAuth provider</span>
+<span class="comment">// GET /auth/google/redirect</span>
+<span class="comment">// → Redirects the user to the Google login page</span>
+
+<span class="comment">// Callback after authentication</span>
+<span class="comment">// GET /auth/google/callback?code=abc123&state=xyz</span>
+<span class="comment">// → Exchanges the code, creates/finds the user, returns a JWT</span>
+
+<span class="comment">// Same principle for GitHub</span>
+<span class="comment">// GET /auth/github/redirect</span>
+<span class="comment">// GET /auth/github/callback</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>OAuthManager Configuration</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Framework\OAuth\OAuthManager</span>;
+
+<span class="comment">// Get an OAuth driver</span>
+<span class="variable">$google</span> = <span class="type">OAuthManager</span>::<span class="function">driver</span>(<span class="string">'google'</span>);
+
+<span class="comment">// Generate the redirect URL</span>
+<span class="variable">$redirectUrl</span> = <span class="variable">$google</span>-><span class="function">redirect</span>();
+
+<span class="comment">// Exchange the code in the callback</span>
+<span class="variable">$oauthUser</span> = <span class="variable">$google</span>-><span class="function">callback</span>(<span class="variable">$code</span>);
+<span class="comment">// $oauthUser contains: id, email, name, avatar</span>
+
+<span class="comment">// Create or find the local user</span>
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">firstOrCreate</span>(
+    [<span class="string">'email'</span> => <span class="variable">$oauthUser</span>-><span class="variable">email</span>],
+    [
+        <span class="string">'name'</span>     => <span class="variable">$oauthUser</span>-><span class="variable">name</span>,
+        <span class="string">'avatar'</span>   => <span class="variable">$oauthUser</span>-><span class="variable">avatar</span>,
+        <span class="string">'provider'</span> => <span class="string">'google'</span>,
+    ]
+);</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Supported providers</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Provider</th><th>Driver</th><th>Scopes by default</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Google</td>
+            <td><code>OAuthManager::driver('google')</code></td>
+            <td><code>openid email profile</code></td>
+          </tr>
+          <tr>
+            <td>GitHub</td>
+            <td><code>OAuthManager::driver('github')</code></td>
+            <td><code>user:email read:user</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Environment variables</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Google OAuth</span>
+<span class="variable">OAUTH_GOOGLE_CLIENT_ID</span>=<span class="string">123456789.apps.googleusercontent.com</span>
+<span class="variable">OAUTH_GOOGLE_CLIENT_SECRET</span>=<span class="string">GOCSPX-xxxxxxxxxxxxxxxx</span>
+<span class="variable">OAUTH_GOOGLE_REDIRECT_URI</span>=<span class="string">https://app.example.com/auth/google/callback</span>
+
+<span class="comment"># GitHub OAuth</span>
+<span class="variable">OAUTH_GITHUB_CLIENT_ID</span>=<span class="string">Iv1.xxxxxxxxxxxxxxxx</span>
+<span class="variable">OAUTH_GITHUB_CLIENT_SECRET</span>=<span class="string">xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</span>
+<span class="variable">OAUTH_GITHUB_REDIRECT_URI</span>=<span class="string">https://app.example.com/auth/github/callback</span></code></pre>
+      <div class="callout callout-danger">
+        <strong>Security./strong>
+        Ne commitez jamais les secrets OAuth dans le code source. Utilisez des variables d'environnement ou un secret manager (Vault, K8s Secrets).
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     4. Deploy CLI
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Deploy CLI <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The <code>deploy</code> command automates the complete deployment cycle: Docker image build, push to registry, and Kubernetes rollout. All in a single command.</p>
+
+  <details open>
+    <summary>Standard deployment</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Complete deployment (build + push + rollout)</span>
+<span class="keyword">./forge</span> <span class="function">deploy</span>
+
+<span class="comment"># Deployment with a specific tag</span>
+<span class="keyword">./forge</span> <span class="function">deploy</span> --tag=v2.3.1
+
+<span class="comment"># Dry-run mode: shows commands without executing them</span>
+<span class="keyword">./forge</span> <span class="function">deploy</span> --dry-run</code></pre>
+      <div class="diagram">
+<pre>
+./forge deploy
+     │
+     ├─► 1. Git tag detection (or --tag)
+     │      git describe --tags --abbrev=0
+     │
+     ├─► 2. Docker image build
+     │      docker build -t registry/image:tag .
+     │
+     ├─► 3. Push to the registry
+     │      docker push registry/image:tag
+     │
+     └─► 4. Kubernetes rollout
+            kubectl set image deployment/app
+              app=registry/image:tag
+              -n namespace
+</pre>
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Options and flags</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Flag</th><th>Description</th><th>Defaut</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>--tag=v1.0.0</code></td>
+            <td>Docker image tag</td>
+            <td>Dernier tag git detecte automatically</td>
+          </tr>
+          <tr>
+            <td><code>--dry-run</code></td>
+            <td>Shows commands without executing them</td>
+            <td><code>false</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Environment variables</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Docker Registry (e.g. Docker Hub, GCR, ECR)</span>
+<span class="variable">DEPLOY_REGISTRY</span>=<span class="string">registry.example.com</span>
+
+<span class="comment"># Image name</span>
+<span class="variable">DEPLOY_IMAGE</span>=<span class="string">myapp/api</span>
+
+<span class="comment"># Kubernetes namespace</span>
+<span class="variable">DEPLOY_NAMESPACE</span>=<span class="string">production</span></code></pre>
+      <div class="callout callout-info">
+        <strong>Automatic tag detection.</strong>
+        If <code>--tag</code> is not specified, the command uses <code>git describe --tags --abbrev=0</code> to detect the last git tag. If no tag exists, the short commit hash is used as a fallback.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Full example</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># 1. Create a git tag</span>
+<span class="keyword">git</span> tag v2.4.0
+<span class="keyword">git</span> push --tags
+
+<span class="comment"># 2. Deployer (le tag est detecte automatically)</span>
+<span class="keyword">./forge</span> <span class="function">deploy</span>
+
+<span class="comment"># Output:</span>
+<span class="comment"># [deploy] Tag detected: v2.4.0</span>
+<span class="comment"># [deploy] Building registry.example.com/myapp/api:v2.4.0 ...</span>
+<span class="comment"># [deploy] Pushing to registry.example.com ...</span>
+<span class="comment"># [deploy] Rolling out to namespace 'production' ...</span>
+<span class="comment"># [deploy] Done. Deployment successful.</span></code></pre>
+      <div class="callout callout-warning">
+        <strong>Prerequisites.</strong>
+        The <code>docker</code> and <code>kubectl</code> tools must be installed and configured on the machine running the command. Make sure the Kubernetes context points to the correct cluster.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     Pagination
+     ═══════════════════════════════════════════ -->
+
+<div class="pagination">
+  <a href="11-scheduler-queue.html" class="prev">Scheduler, Queue &amp; Feature Flags</a>
+  <a href="13-performance.html" class="next">Performance &amp; Lazy Loading</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

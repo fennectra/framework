@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09 — Profiler, Rate Limiting & Security</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Profiler, Rate Limiting &amp; Securite</h1>
+  <p>Debug, protect and monitor your API</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 09 &mdash; Profiler, Rate Limiting &amp; Securite</div>
+
+<!-- ═══════════════════════════════════════════
+     1. Debug Profiler
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Debug Profiler <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The Profiler is a diagnostic tool built into the framework. It collects detailed metrics for each HTTP request: SQL queries, dispatched events, middleware timing, memory consumption and N+1 problem detection.</p>
+
+  <details open>
+    <summary>Activation</summary>
+    <div class="details-body">
+      <p>The profiler is activated in two ways in your <code>.env</code> file:</p>
+<pre><code><span class="comment"># Method 1: explicit activation</span>
+<span class="variable">PROFILER_ENABLED</span>=<span class="number">1</span>
+
+<span class="comment"># Method 2: automatic in development mode</span>
+<span class="variable">APP_ENV</span>=<span class="string">dev</span></code></pre>
+      <div class="callout callout-warning">
+        <strong>Production.</strong>
+        Ne jamais activer le profiler in production. Il ajoute un overhead sur chaque requete et expose des informations sensibles (requetes SQL, structure interne).
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Viewing endpoints</summary>
+    <div class="details-body">
+      <p>Once activated, two endpoints are available:</p>
+      <table>
+        <thead><tr><th>Endpoint</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET /debug/profiler</code></td><td>List of the last 50 profiled requests</td></tr>
+          <tr><td><code>GET /debug/profiler/{id}</code></td><td>Complete detail of a specific request</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>JSON output structure</summary>
+    <div class="details-body">
+      <p>Each profile returns a JSON object with the following sections:</p>
+<pre><code>{
+    <span class="string">"id"</span>:          <span class="string">"req_64a1b2c3"</span>,
+    <span class="string">"method"</span>:      <span class="string">"GET"</span>,
+    <span class="string">"uri"</span>:         <span class="string">"/api/users"</span>,
+    <span class="string">"status"</span>:      <span class="number">200</span>,
+    <span class="string">"duration_ms"</span>: <span class="number">12.4</span>,
+    <span class="string">"memory_mb"</span>:   <span class="number">2.1</span>,
+    <span class="string">"sql"</span>: {
+        <span class="string">"count"</span>:   <span class="number">3</span>,
+        <span class="string">"time_ms"</span>: <span class="number">4.2</span>,
+        <span class="string">"queries"</span>: [
+            { <span class="string">"sql"</span>: <span class="string">"SELECT * FROM users"</span>, <span class="string">"time_ms"</span>: <span class="number">1.8</span>, <span class="string">"params"</span>: [] }
+        ]
+    },
+    <span class="string">"events"</span>:      [<span class="string">"user.loaded"</span>, <span class="string">"response.sent"</span>],
+    <span class="string">"middlewares"</span>: [
+        { <span class="string">"name"</span>: <span class="string">"Auth"</span>, <span class="string">"time_ms"</span>: <span class="number">0.8</span> },
+        { <span class="string">"name"</span>: <span class="string">"RateLimit"</span>, <span class="string">"time_ms"</span>: <span class="number">0.3</span> }
+    ],
+    <span class="string">"warnings"</span>:    [<span class="string">"N+1 detected: SELECT * FROM posts WHERE user_id = ? (x5)"</span>]
+}</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Collection hooks</summary>
+    <div class="details-body">
+      <p>Le profiler s'insere automatically dans les composants suivants pour collecter les metriques :</p>
+      <table>
+        <thead><tr><th>Component</th><th>Data collected</th></tr></thead>
+        <tbody>
+          <tr><td><code>Database::query()</code></td><td>SQL query, parameters, execution time</td></tr>
+          <tr><td><code>EventDispatcher</code></td><td>Event name, number of listeners, total time</td></tr>
+          <tr><td><code>MiddlewarePipeline</code></td><td>Middleware name, processing duration</td></tr>
+          <tr><td><code>Container</code></td><td>Resolved services, resolution time</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>N+1 Detection</summary>
+    <div class="details-body">
+      <p>The profiler analyzes SQL queries collected during a request. If the same SQL pattern (same structure, different parameters) is executed more than <strong>3 times</strong>, an N+1 warning is issued.</p>
+<pre><code><span class="comment">// Example of N+1 problem:</span>
+<span class="keyword">foreach</span> (<span class="variable">$users</span> <span class="keyword">as</span> <span class="variable">$user</span>) {
+    <span class="comment">// Each iteration generates a separate SQL query!</span>
+    <span class="variable">$posts</span> = <span class="type">Post</span>::<span class="function">query</span>()-><span class="function">where</span>(<span class="string">'user_id'</span>, <span class="variable">$user</span>-><span class="variable">id</span>)-><span class="function">get</span>();
+}
+
+<span class="comment">// The profiler detects:</span>
+<span class="comment">// "N+1 detected: SELECT * FROM posts WHERE user_id = ? (x12)"</span>
+
+<span class="comment">// Solution: eager loading</span>
+<span class="variable">$users</span> = <span class="type">User</span>::<span class="function">query</span>()-><span class="function">with</span>(<span class="string">'posts'</span>)-><span class="function">get</span>();</code></pre>
+      <div class="callout callout-info">
+        <strong>Seuil configurable.</strong>
+        Le seuil by default est de 3 repetitions. Ce seuil est volontairement bas pour detecter les problemes le plus tot possible pendant le developpement.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>InMemory Storage (ring buffer)</summary>
+    <div class="details-body">
+      <p>Profiles are stored in memory via <code>InMemoryStorage</code>, a circular buffer that keeps the <strong>last 50 requests</strong>. In worker mode (FrankenPHP), this buffer persists between requests of the same worker, providing history without disk I/O.</p>
+
+      <div class="diagram">
+<pre>
+  Requete 1    Requete 2    ...    Requete 50    Requete 51
+  ┌────────┐   ┌────────┐         ┌────────┐    ┌────────┐
+  │ Profil │   │ Profil │   ...   │ Profil │    │ Profil │
+  └───┬────┘   └───┬────┘         └───┬────┘    └───┬────┘
+      │            │                   │             │
+      v            v                   v             v
+  ┌──────────────────────────────────────────────────────┐
+  │          InMemoryStorage  (ring buffer = 50)         │
+  │  [slot 0] [slot 1] ... [slot 49]                     │
+  │     ^                                                │
+  │     └── Request 51 overwrites Request 1                  │
+  └──────────────────────────────────────────────────────┘
+</pre>
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Integration in the pipeline</summary>
+    <div class="details-body">
+      <p>The <code>ProfilerMiddleware</code> must be placed first in the pipeline to measure the entire request cycle:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Middleware\ProfilerMiddleware</span>;
+<span class="keyword">use</span> <span class="type">Framework\Middleware\SecurityHeadersMiddleware</span>;
+<span class="keyword">use</span> <span class="type">Framework\Middleware\RateLimitMiddleware</span>;
+<span class="keyword">use</span> <span class="type">Framework\Middleware\RequestLoggingMiddleware</span>;
+
+<span class="comment">// config/middleware.php</span>
+<span class="keyword">return</span> [
+    <span class="comment">// Profiler first to capture the entire cycle</span>
+    <span class="type">ProfilerMiddleware</span>::<span class="keyword">class</span>,
+
+    <span class="comment">// Global middleware</span>
+    <span class="type">SecurityHeadersMiddleware</span>::<span class="keyword">class</span>,
+    <span class="type">RequestLoggingMiddleware</span>::<span class="keyword">class</span>,
+    <span class="type">RateLimitMiddleware</span>::<span class="keyword">class</span>,
+];</code></pre>
+      <div class="callout callout-info">
+        <strong>Conditionnel.</strong>
+        Le <code>ProfilerMiddleware</code> verifie automatically si le profiler est active. S'il ne l'est pas, il passe directement au middleware suivant sans aucun overhead.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     2. Rate Limiting
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Rate Limiting <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>Le Rate Limiting protege votre API contre les abus en limitant le nombre de requetes per IP address et per route dans une fenetre de temps donnee.</p>
+
+  <details open>
+    <summary>How it works</summary>
+    <div class="details-body">
+      <p>The <code>RateLimitMiddleware</code> uses a key composed of the client's IP address and the requested route. Each IP+route combination has its own counter.</p>
+
+      <div class="diagram">
+<pre>
+  Client 192.168.1.10           Client 192.168.1.20
+        │                              │
+        v                              v
+  ┌──────────────┐              ┌──────────────┐
+  │ GET /api/users│              │ GET /api/users│
+  │  Counter: 28/30│            │  Counter: 5/30│
+  └──────┬───────┘              └──────┬───────┘
+         │                              │
+         v                              v
+  ┌────────────────────────────────────────────┐
+  │           RateLimitMiddleware               │
+  │  Key = sha256(IP + Route)                  │
+  │  Store: Redis (prod) / InMemory (dev)     │
+  └────────────────────────────────────────────┘
+</pre>
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Stores: Redis vs InMemory</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Store</th><th>Context</th><th>Advantage</th></tr></thead>
+        <tbody>
+          <tr><td><code>RedisStore</code></td><td>Production, Kubernetes</td><td>Shared between all pods/workers. Counters are synchronized via Redis.</td></tr>
+          <tr><td><code>InMemoryStore</code></td><td>Development</td><td>Zero external dependency. Counters live in the worker memory.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-warning">
+        <strong>Watch out in dev.</strong>
+        With <code>InMemoryStore</code>, each worker has its own counters. If you have 4 workers, a client can theoretically make 4x the limit.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Configuration per route</summary>
+    <div class="details-body">
+      <p>Add the middleware with its parameters directly on a route:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Middleware\RateLimitMiddleware</span>;
+
+<span class="comment">// 30 requetes max per window de 60 secondes</span>
+<span class="variable">$router</span>-><span class="function">post</span>(
+    <span class="string">'/api/login'</span>,
+    [<span class="type">TokenController</span>::<span class="keyword">class</span>, <span class="string">'generate'</span>],
+    [[<span class="type">RateLimitMiddleware</span>::<span class="keyword">class</span>, [<span class="string">'limit'</span> => <span class="number">30</span>, <span class="string">'window'</span> => <span class="number">60</span>]]]
+);
+
+<span class="comment">// Stricter limit for sensitive endpoints</span>
+<span class="variable">$router</span>-><span class="function">post</span>(
+    <span class="string">'/api/password/reset'</span>,
+    [<span class="type">PasswordController</span>::<span class="keyword">class</span>, <span class="string">'reset'</span>],
+    [[<span class="type">RateLimitMiddleware</span>::<span class="keyword">class</span>, [<span class="string">'limit'</span> => <span class="number">5</span>, <span class="string">'window'</span> => <span class="number">300</span>]]]
+);</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Attribut #[RateLimit]</summary>
+    <div class="details-body">
+      <p>You can also use the PHP attribute directly on the controller method:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Attributes\RateLimit</span>;
+
+<span class="keyword">class</span> <span class="type">TokenController</span>
+{
+    #[<span class="type">RateLimit</span>(<span class="number">60</span>, <span class="string">'minute'</span>)]
+    <span class="keyword">public function</span> <span class="function">generate</span>(): <span class="type">array</span>
+    {
+        <span class="comment">// 60 requetes per minute pour cet endpoint</span>
+        <span class="keyword">return</span> [<span class="string">'token'</span> => <span class="variable">$token</span>];
+    }
+
+    #[<span class="type">RateLimit</span>(<span class="number">10</span>, <span class="string">'hour'</span>)]
+    <span class="keyword">public function</span> <span class="function">refresh</span>(): <span class="type">array</span>
+    {
+        <span class="comment">// 10 requetes per hour</span>
+        <span class="keyword">return</span> [<span class="string">'token'</span> => <span class="variable">$newToken</span>];
+    }
+}</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Response headers</summary>
+    <div class="details-body">
+      <p>Each response contains headers indicating the rate limiting state:</p>
+      <table>
+        <thead><tr><th>Header</th><th>Description</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td><code>X-RateLimit-Limit</code></td><td>Maximum number of allowed requests</td><td><code>30</code></td></tr>
+          <tr><td><code>X-RateLimit-Remaining</code></td><td>Remaining requests in the window</td><td><code>27</code></td></tr>
+          <tr><td><code>X-RateLimit-Reset</code></td><td>Unix timestamp of reset</td><td><code>1711036800</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>429 Too Many Requests Response</summary>
+    <div class="details-body">
+      <p>When the limit is reached, the middleware returns a <strong>429</strong> response with a JSON body:</p>
+<pre><code><span class="comment">// HTTP/1.1 429 Too Many Requests</span>
+<span class="comment">// X-RateLimit-Limit: 30</span>
+<span class="comment">// X-RateLimit-Remaining: 0</span>
+<span class="comment">// X-RateLimit-Reset: 1711036800</span>
+<span class="comment">// Retry-After: 42</span>
+
+{
+    <span class="string">"error"</span>: <span class="string">"Too Many Requests"</span>,
+    <span class="string">"message"</span>: <span class="string">"Rate limit exceeded. Retry after 42 seconds."</span>,
+    <span class="string">"retry_after"</span>: <span class="number">42</span>
+}</code></pre>
+      <div class="callout callout-danger">
+        <strong>Do not ignore the Retry-After header.</strong>
+        Well-implemented clients should respect this header to avoid being blocked longer. Continuing to send requests after a 429 can result in a temporary ban at the reverse proxy level.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     3. Security Headers
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> Security Headers <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>Le <code>SecurityHeadersMiddleware</code> ajoute automatically des headers de securite a chaque reponse HTTP. Il est enregistre comme middleware global, donc toutes les routes en beneficient sans configuration supplementaire.</p>
+
+  <details open>
+    <summary>Added headers</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Header</th><th>Value</th><th>Protection</th></tr></thead>
+        <tbody>
+          <tr><td><code>X-Content-Type-Options</code></td><td><code>nosniff</code></td><td>Prevents the browser from guessing the MIME type</td></tr>
+          <tr><td><code>X-Frame-Options</code></td><td><code>DENY</code></td><td>Blocks inclusion in an iframe (anti-clickjacking)</td></tr>
+          <tr><td><code>X-XSS-Protection</code></td><td><code>1; mode=block</code></td><td>Activates the browser XSS filter</td></tr>
+          <tr><td><code>Strict-Transport-Security</code></td><td><code>max-age=31536000; includeSubDomains</code></td><td>Forces HTTPS for 1 year (HSTS)</td></tr>
+          <tr><td><code>Content-Security-Policy</code></td><td><code>default-src 'self'</code></td><td>Limits allowed content sources (CSP)</td></tr>
+          <tr><td><code>Referrer-Policy</code></td><td><code>strict-origin-when-cross-origin</code></td><td>Controls information sent in the Referer header</td></tr>
+          <tr><td><code>Permissions-Policy</code></td><td><code>geolocation=(), camera=(), microphone=()</code></td><td>Disables sensitive browser APIs</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Global registration</summary>
+    <div class="details-body">
+      <p>The middleware is declared in the global middleware configuration. It runs for every request:</p>
+<pre><code><span class="comment">// config/middleware.php</span>
+<span class="keyword">return</span> [
+    <span class="type">ProfilerMiddleware</span>::<span class="keyword">class</span>,
+    <span class="type">SecurityHeadersMiddleware</span>::<span class="keyword">class</span>,   <span class="comment">// &lt;-- global, all routes</span>
+    <span class="type">RequestLoggingMiddleware</span>::<span class="keyword">class</span>,
+    <span class="type">RateLimitMiddleware</span>::<span class="keyword">class</span>,
+];</code></pre>
+      <div class="callout callout-info">
+        <strong>Pas de configuration necessaire.</strong>
+        Le middleware utilise des valeurs by default securisees. Pour une API JSON, ces headers suffisent dans la grande majorite des cas. Si vous servez aussi du HTML, ajustez la CSP selon vos besoins.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Internal implementation</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">namespace</span> <span class="type">Framework\Middleware</span>;
+
+<span class="keyword">class</span> <span class="type">SecurityHeadersMiddleware</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">callable</span> <span class="variable">$next</span>): <span class="type">mixed</span>
+    {
+        <span class="comment">// Execute the request normally</span>
+        <span class="variable">$response</span> = <span class="variable">$next</span>();
+
+        <span class="comment">// Add security headers</span>
+        <span class="function">header</span>(<span class="string">'X-Content-Type-Options: nosniff'</span>);
+        <span class="function">header</span>(<span class="string">'X-Frame-Options: DENY'</span>);
+        <span class="function">header</span>(<span class="string">'X-XSS-Protection: 1; mode=block'</span>);
+        <span class="function">header</span>(<span class="string">'Strict-Transport-Security: max-age=31536000; includeSubDomains'</span>);
+        <span class="function">header</span>(<span class="string">'Content-Security-Policy: default-src \'self\''</span>);
+        <span class="function">header</span>(<span class="string">'Referrer-Policy: strict-origin-when-cross-origin'</span>);
+        <span class="function">header</span>(<span class="string">'Permissions-Policy: geolocation=(), camera=(), microphone=()'</span>);
+
+        <span class="keyword">return</span> <span class="variable">$response</span>;
+    }
+}</code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     4. Request Logging
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Request Logging <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The <code>RequestLoggingMiddleware</code> traces each incoming request with a unique identifier, measures the duration and memory consumed, then logs the result with the appropriate severity level.</p>
+
+  <details open>
+    <summary>Request ID</summary>
+    <div class="details-body">
+      <p>Each request receives a unique identifier (UUID v4) that is propagated in the logs and returned to the client via the <code>X-Request-Id</code> header. This allows tracing a request end-to-end.</p>
+<pre><code><span class="comment"># Reponse HTTP</span>
+<span class="type">HTTP/1.1</span> <span class="number">200</span> OK
+<span class="type">X-Request-Id</span>: <span class="string">a1b2c3d4-e5f6-7890-abcd-ef1234567890</span>
+<span class="type">Content-Type</span>: application/json</code></pre>
+      <div class="callout callout-info">
+        <strong>Distributed debugging.</strong>
+        In case of a problem, share the <code>X-Request-Id</code> with your backend team. They can instantly find all logs associated with that request.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Log format</summary>
+    <div class="details-body">
+      <p>Each request is logged with the following format:</p>
+<pre><code><span class="comment">METHOD URI STATUS DURATION</span>
+
+<span class="comment"># Examples:</span>
+<span class="string">[2026-03-21 14:30:12]</span> <span class="keyword">INFO</span>  <span class="function">GET</span> <span class="string">/api/users</span> <span class="number">200</span> <span class="number">12.4ms</span> <span class="number">2.1MB</span> <span class="variable">req_a1b2c3d4</span>
+<span class="string">[2026-03-21 14:30:13]</span> <span class="keyword">WARN</span>  <span class="function">POST</span> <span class="string">/api/login</span> <span class="number">401</span> <span class="number">3.2ms</span> <span class="number">1.0MB</span> <span class="variable">req_e5f67890</span>
+<span class="string">[2026-03-21 14:30:15]</span> <span class="keyword">ERROR</span> <span class="function">GET</span> <span class="string">/api/reports</span> <span class="number">500</span> <span class="number">45.1ms</span> <span class="number">8.3MB</span> <span class="variable">req_abcdef12</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Log levels</summary>
+    <div class="details-body">
+      <p>The middleware chooses the log level based on the HTTP status code:</p>
+      <table>
+        <thead><tr><th>Code HTTP</th><th>Level</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>2xx</code> / <code>3xx</code></td><td><code>info</code></td><td>Request processed successfully or redirect</td></tr>
+          <tr><td><code>4xx</code></td><td><code>warning</code></td><td>Client error (validation, auth, not found)</td></tr>
+          <tr><td><code>5xx</code></td><td><code>error</code></td><td>Server error (unhandled exception, bug)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Collected metrics</summary>
+    <div class="details-body">
+      <p>The middleware measures two key metrics for each request:</p>
+      <ul>
+        <li><strong>Duration:</strong> time elapsed between middleware entry and exit (in milliseconds)</li>
+        <li><strong>Memory:</strong> peak memory used during request processing (in megabytes)</li>
+      </ul>
+<pre><code><span class="keyword">namespace</span> <span class="type">Framework\Middleware</span>;
+
+<span class="keyword">class</span> <span class="type">RequestLoggingMiddleware</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">callable</span> <span class="variable">$next</span>): <span class="type">mixed</span>
+    {
+        <span class="variable">$requestId</span> = <span class="function">bin2hex</span>(<span class="function">random_bytes</span>(<span class="number">16</span>));
+        <span class="variable">$start</span>     = <span class="function">hrtime</span>(<span class="keyword">true</span>);
+
+        <span class="comment">// Propagate the request ID</span>
+        <span class="function">header</span>(<span class="string">"X-Request-Id: <span class="variable">$requestId</span>"</span>);
+
+        <span class="comment">// Execute the rest of the pipeline</span>
+        <span class="variable">$response</span> = <span class="variable">$next</span>();
+
+        <span class="comment">// Calculate the metrics</span>
+        <span class="variable">$duration</span> = (<span class="function">hrtime</span>(<span class="keyword">true</span>) - <span class="variable">$start</span>) / <span class="number">1e6</span>;
+        <span class="variable">$memory</span>   = <span class="function">memory_get_peak_usage</span>(<span class="keyword">true</span>) / <span class="number">1024</span> / <span class="number">1024</span>;
+        <span class="variable">$status</span>   = <span class="function">http_response_code</span>();
+
+        <span class="comment">// Choose the log level</span>
+        <span class="variable">$level</span> = <span class="keyword">match</span>(<span class="keyword">true</span>) {
+            <span class="variable">$status</span> >= <span class="number">500</span> => <span class="string">'error'</span>,
+            <span class="variable">$status</span> >= <span class="number">400</span> => <span class="string">'warning'</span>,
+            <span class="keyword">default</span>        => <span class="string">'info'</span>,
+        };
+
+        <span class="comment">// Log the request</span>
+        <span class="type">Logger</span>::<span class="function">log</span>(<span class="variable">$level</span>, <span class="function">sprintf</span>(
+            <span class="string">'%s %s %d %.1fms %.1fMB %s'</span>,
+            <span class="variable">$_SERVER</span>[<span class="string">'REQUEST_METHOD'</span>],
+            <span class="variable">$_SERVER</span>[<span class="string">'REQUEST_URI'</span>],
+            <span class="variable">$status</span>,
+            <span class="variable">$duration</span>,
+            <span class="variable">$memory</span>,
+            <span class="variable">$requestId</span>
+        ));
+
+        <span class="keyword">return</span> <span class="variable">$response</span>;
+    }
+}</code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     Pagination
+     ═══════════════════════════════════════════ -->
+
+<div class="pagination">
+  <a href="08-exercises-framework.html" class="prev">Framework Exercises</a>
+  <a href="10-migrations-cache.html" class="next">Migrations, Seeding & Cache</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>
