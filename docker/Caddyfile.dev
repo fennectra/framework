@@ -1,0 +1,18 @@
+{
+	auto_https off
+	admin off
+
+	frankenphp {
+		worker /app/public/index.php
+	}
+
+	order php_server before file_server
+}
+
+:{$PORT:8080} {
+	root * /app/public
+
+	encode zstd gzip
+
+	php_server
+}

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10 — Migrations, Seeding & Cache</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Migrations, Seeding &amp; Cache</h1>
+  <p>Eager loading, schema management, test data and Redis cache</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 10 &mdash; Migrations, Seeding &amp; Cache</div>
+
+<!-- ═══════════════════════════════════════════
+     1. Eager Loading with()
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Eager Loading with with() <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The N+1 problem is the most common performance trap with an ORM. Without eager loading, each relation access triggers an additional query. With <code>with()</code>, the framework loads all relations in a single batched query.</p>
+
+  <details open>
+    <summary>The N+1 Problem &mdash; Diagram</summary>
+    <div class="details-body">
+      <p>Imagine 50 users, each with a role. Without eager loading:</p>
+<pre><code><span class="comment">┌──────────────────────────────────────────────────────────┐</span>
+<span class="comment">│  Requete 1 : SELECT * FROM users                        │</span>
+<span class="comment">│  ──────────────────────────────────────────────────────── │</span>
+<span class="comment">│  Requete 2 : SELECT * FROM roles WHERE id = 1           │</span>
+<span class="comment">│  Requete 3 : SELECT * FROM roles WHERE id = 2           │</span>
+<span class="comment">│  Requete 4 : SELECT * FROM roles WHERE id = 1           │</span>
+<span class="comment">│  ...                                                     │</span>
+<span class="comment">│  Requete 51: SELECT * FROM roles WHERE id = 3           │</span>
+<span class="comment">│                                                          │</span>
+<span class="comment">│  Total: 1 + 50 = 51 queries!                         │</span>
+<span class="comment">└──────────────────────────────────────────────────────────┘</span>
+
+<span class="comment">With eager loading:</span>
+<span class="comment">┌──────────────────────────────────────────────────────────┐</span>
+<span class="comment">│  Requete 1 : SELECT * FROM users                        │</span>
+<span class="comment">│  Requete 2 : SELECT * FROM roles WHERE id IN (1, 2, 3)  │</span>
+<span class="comment">│                                                          │</span>
+<span class="comment">│  Total: only 2 queries!                         │</span>
+<span class="comment">└──────────────────────────────────────────────────────────┘</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Before / After &mdash; Code Comparison</summary>
+    <div class="details-body">
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">N+1 &mdash; Dangerous</div>
+<pre><code><span class="comment">// 1 query for users</span>
+<span class="variable">$users</span> = <span class="type">User</span>::<span class="function">all</span>();
+
+<span class="comment">// Loop: 1 query PER user for the role</span>
+<span class="keyword">foreach</span> (<span class="variable">$users</span> <span class="keyword">as</span> <span class="variable">$user</span>) {
+    <span class="comment">// __get('role') → SELECT * FROM roles WHERE id = ?</span>
+    <span class="variable">$roleName</span> = <span class="variable">$user</span>-><span class="variable">role</span>-><span class="variable">name</span>;
+}
+
+<span class="comment">// 50 users = 51 SQL queries!</span></code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">Eager Loading &mdash; Correct</div>
+<pre><code><span class="comment">// Only 2 queries, regardless of the number</span>
+<span class="variable">$users</span> = <span class="type">User</span>::<span class="function">with</span>(<span class="string">'role'</span>)-><span class="function">get</span>();
+
+<span class="comment">// The relation is already loaded in memory</span>
+<span class="keyword">foreach</span> (<span class="variable">$users</span> <span class="keyword">as</span> <span class="variable">$user</span>) {
+    <span class="comment">// No query: read from $_relations</span>
+    <span class="variable">$roleName</span> = <span class="variable">$user</span>-><span class="variable">role</span>-><span class="variable">name</span>;
+}
+
+<span class="comment">// Multiple relations: with('role', 'posts')</span></code></pre>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Relation objects: BelongsTo, HasMany, HasOne</summary>
+    <div class="details-body">
+      <p>The framework defines three types of relations in <code>Framework\Core\Relations\</code> :</p>
+      <table>
+        <thead><tr><th>Class</th><th>Usage</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code><span class="type">BelongsTo</span></code></td>
+            <td>The model has a foreign key to a parent</td>
+            <td><code>User -&gt; Role</code> via <code>role_id</code></td>
+          </tr>
+          <tr>
+            <td><code><span class="type">HasMany</span></code></td>
+            <td>The model is referenced by N children</td>
+            <td><code>User -&gt; Posts</code> via <code>user_id</code></td>
+          </tr>
+          <tr>
+            <td><code><span class="type">HasOne</span></code></td>
+            <td>The model is referenced by a single child</td>
+            <td><code>User -&gt; Profile</code> via <code>user_id</code></td>
+          </tr>
+        </tbody>
+      </table>
+<pre><code><span class="comment">// In the User Model</span>
+<span class="keyword">public function</span> <span class="function">role</span>(): ?<span class="type">Role</span>
+{
+    <span class="keyword">return</span> <span class="variable">$this</span>-><span class="function">belongsTo</span>(<span class="type">Role</span>::<span class="keyword">class</span>, <span class="string">'role_id'</span>);
+}
+
+<span class="keyword">public function</span> <span class="function">posts</span>(): <span class="type">Collection</span>
+{
+    <span class="keyword">return</span> <span class="variable">$this</span>-><span class="function">hasMany</span>(<span class="type">Post</span>::<span class="keyword">class</span>, <span class="string">'user_id'</span>);
+}</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>__get() Magic &mdash; Lazy Resolution</summary>
+    <div class="details-body">
+      <p>When you access <code>$user-&gt;role</code>, the Model follows this algorithm:</p>
+<pre><code><span class="keyword">public function</span> <span class="function">__get</span>(<span class="type">string</span> <span class="variable">$name</span>): <span class="type">mixed</span>
+{
+    <span class="comment">// 1. Relation already loaded (eager or lazy cache)?</span>
+    <span class="keyword">if</span> (<span class="function">array_key_exists</span>(<span class="variable">$name</span>, <span class="variable">$this</span>-><span class="variable">_relations</span>)) {
+        <span class="keyword">return</span> <span class="variable">$this</span>-><span class="variable">_relations</span>[<span class="variable">$name</span>];
+    }
+
+    <span class="comment">// 2. Existing relation method → call and cache</span>
+    <span class="keyword">if</span> (<span class="function">method_exists</span>(<span class="variable">$this</span>, <span class="variable">$name</span>)) {
+        <span class="variable">$result</span> = <span class="variable">$this</span>-><span class="variable">$name</span>();
+        <span class="keyword">if</span> (<span class="variable">$result</span> <span class="keyword">instanceof</span> <span class="type">Relation</span>) {
+            <span class="variable">$resolved</span> = <span class="variable">$result</span>-><span class="function">resolve</span>();
+            <span class="variable">$this</span>-><span class="variable">_relations</span>[<span class="variable">$name</span>] = <span class="variable">$resolved</span>;
+            <span class="keyword">return</span> <span class="variable">$resolved</span>;
+        }
+    }
+    <span class="comment">// 3. Otherwise, access the regular attribute</span>
+}</code></pre>
+      <div class="callout callout-info">
+        <strong>Per-instance cache.</strong>
+        Once resolved, the relation is stored in <code>$_relations</code>. Subsequent calls generate no additional queries.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>eagerLoadOnto() &mdash; Batching with WHERE IN()</summary>
+    <div class="details-body">
+      <p>When <code>ModelQueryBuilder</code> detects relations to eager-load, it calls <code>eagerLoadOnto()</code> on each relation. Here is what <code>BelongsTo</code> does:</p>
+<pre><code><span class="keyword">public function</span> <span class="function">eagerLoadOnto</span>(<span class="type">Collection</span> <span class="variable">$models</span>, <span class="type">string</span> <span class="variable">$relationName</span>): <span class="type">void</span>
+{
+    <span class="comment">// 1. Collect all unique FKs</span>
+    <span class="variable">$fkValues</span> = [];
+    <span class="keyword">foreach</span> (<span class="variable">$models</span> <span class="keyword">as</span> <span class="variable">$model</span>) {
+        <span class="variable">$fk</span> = <span class="variable">$model</span>-><span class="function">getAttribute</span>(<span class="variable">$this</span>-><span class="variable">foreignKey</span>);
+        <span class="keyword">if</span> (<span class="variable">$fk</span> !== <span class="keyword">null</span>) {
+            <span class="variable">$fkValues</span>[<span class="variable">$fk</span>] = <span class="keyword">true</span>;
+        }
+    }
+
+    <span class="comment">// 2. SINGLE query with WHERE IN</span>
+    <span class="variable">$rows</span> = <span class="variable">$relatedClass</span>::<span class="function">query</span>()
+        -><span class="function">whereIn</span>(<span class="variable">$this</span>-><span class="variable">localKey</span>, <span class="function">array_keys</span>(<span class="variable">$fkValues</span>))
+        -><span class="function">get</span>();
+
+    <span class="comment">// 3. Map and attach to each model</span>
+    <span class="keyword">foreach</span> (<span class="variable">$models</span> <span class="keyword">as</span> <span class="variable">$model</span>) {
+        <span class="variable">$model</span>-><span class="function">setRelation</span>(<span class="variable">$relationName</span>, <span class="variable">$relatedMap</span>[<span class="variable">$fk</span>] ?? <span class="keyword">null</span>);
+    }
+}</code></pre>
+      <div class="callout callout-warning">
+        <strong>Performance.</strong>
+        For 1000 users with 3 distinct roles, the WHERE IN contains only 3 values. The gain is enormous compared to 1000 individual queries.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     2. Migrations
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Migrations <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>Migrations version your database schema. Each migration is a PHP file that returns an array with the <code>up</code> (apply) and <code>down</code> (rollback) keys. The <code>MigrationRunner</code> manages the order and tracking in a <code>migrations</code> table.</p>
+
+  <details open>
+    <summary>Run pending migrations</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Apply all not yet executed migrations</span>
+<span class="keyword">./forge</span> <span class="function">migrate</span>
+
+<span class="comment"># Output:</span>
+<span class="comment"># [OK] 2025_01_15_create_users ... migrated</span>
+<span class="comment"># [OK] 2025_01_16_create_roles ... migrated</span>
+<span class="comment"># [OK] 2025_01_17_create_posts ... migrated</span></code></pre>
+      <p>Le runner detecte automatically les fichiers dans <code>database/migrations/</code>, compares with the <code>migrations</code>, table, and only runs the missing files.</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Generate a migration</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Create a migration file with timestamp</span>
+<span class="keyword">./forge</span> <span class="function">make:migration</span> <span class="string">create_products</span>
+
+<span class="comment"># Cree : database/migrations/2026_03_21_143000_create_products.php</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Migration file format</summary>
+    <div class="details-body">
+      <p>Each file returns an associative array with raw SQL:</p>
+<pre><code><span class="comment">// database/migrations/2026_03_21_143000_create_products.php</span>
+
+<span class="keyword">return</span> [
+    <span class="string">'up'</span> => <span class="string">'
+        CREATE TABLE products (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            price NUMERIC(10,2) NOT NULL DEFAULT 0,
+            category_id INT REFERENCES categories(id),
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    '</span>,
+
+    <span class="string">'down'</span> => <span class="string">'DROP TABLE IF EXISTS products'</span>,
+];</code></pre>
+      <div class="callout callout-info">
+        <strong>Raw SQL.</strong>
+        No schema builder abstraction: you write PostgreSQL SQL directly. This is more explicit and flexible.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Rollback and status</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Rollback the last batch of migrations</span>
+<span class="keyword">./forge</span> <span class="function">migrate</span> <span class="string">--rollback</span>
+
+<span class="comment"># View the status of all migrations</span>
+<span class="keyword">./forge</span> <span class="function">migrate</span> <span class="string">--status</span>
+
+<span class="comment"># Output:</span>
+<span class="comment"># +-----+--------------------------------------+-----+</span>
+<span class="comment"># | Ran | Migration                            | Bat |</span>
+<span class="comment"># +-----+--------------------------------------+-----+</span>
+<span class="comment"># |  Y  | 2025_01_15_create_users              |  1  |</span>
+<span class="comment"># |  Y  | 2025_01_16_create_roles              |  1  |</span>
+<span class="comment"># |  N  | 2026_03_21_143000_create_products    |  -  |</span>
+<span class="comment"># +-----+--------------------------------------+-----+</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Tracking table &mdash; migrations</summary>
+    <div class="details-body">
+      <p>Le framework cree automatically une table <code>migrations</code> pour suivre ce qui a ete execute :</p>
+<pre><code><span class="keyword">CREATE TABLE IF NOT EXISTS</span> <span class="type">migrations</span> (
+    <span class="variable">id</span>          <span class="type">SERIAL PRIMARY KEY</span>,
+    <span class="variable">migration</span>   <span class="type">VARCHAR</span>(<span class="number">255</span>) <span class="keyword">UNIQUE NOT NULL</span>,
+    <span class="variable">batch</span>       <span class="type">INT</span> <span class="keyword">NOT NULL</span>,
+    <span class="variable">executed_at</span> <span class="type">TIMESTAMP</span> <span class="keyword">DEFAULT</span> <span class="function">NOW</span>()
+);</code></pre>
+      <p>Each <code>migrate</code> execution increments the <strong>batch</strong> number. Rollback cancels all migrations in the last batch as a block, in reverse order.</p>
+      <div class="callout callout-danger">
+        <strong>Ne modifiez jamais une migration deja executee in production.</strong>
+        Creez plutot une nouvelle migration pour modifier le schema. Les migrations deja executees ne seront pas re-executees.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     3. Seeding
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> Seeding <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>Les seeders inserent des donnees de test dans votre base de donnees. Ils utilisent le <code>FakeDataGenerator</code> pour creer des donnees realistes automatically.</p>
+
+  <details open>
+    <summary>Run the seeders</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Run le seeder by default (DatabaseSeeder)</span>
+<span class="keyword">./forge</span> <span class="function">db:seed</span>
+
+<span class="comment"># Run a specific seeder</span>
+<span class="keyword">./forge</span> <span class="function">db:seed</span> <span class="string">--class=UserSeeder</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Generate a seeder</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Create a new seeder</span>
+<span class="keyword">./forge</span> <span class="function">make:seeder</span> <span class="string">UserSeeder</span>
+
+<span class="comment"># Cree : database/seeders/UserSeeder.php</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>FakeDataGenerator &mdash; Realistic Data</summary>
+    <div class="details-body">
+      <p>The fake data generator offers convenient methods:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\Migration\FakeDataGenerator</span>;
+
+<span class="variable">$fake</span> = <span class="keyword">new</span> <span class="type">FakeDataGenerator</span>();
+
+<span class="variable">$fake</span>-><span class="function">name</span>();           <span class="comment">// "Alice Martin"</span>
+<span class="variable">$fake</span>-><span class="function">firstName</span>();      <span class="comment">// "Camille"</span>
+<span class="variable">$fake</span>-><span class="function">lastName</span>();       <span class="comment">// "Dubois"</span>
+<span class="variable">$fake</span>-><span class="function">email</span>();          <span class="comment">// "hugo.leroy.472@example.com"</span>
+<span class="variable">$fake</span>-><span class="function">number</span>(<span class="number">1</span>, <span class="number">100</span>);  <span class="comment">// 42</span>
+<span class="variable">$fake</span>-><span class="function">date</span>();           <span class="comment">// "2023-07-15"</span>
+<span class="variable">$fake</span>-><span class="function">uuid</span>();           <span class="comment">// "550e8400-e29b-41d4-a716-446655440000"</span>
+<span class="variable">$fake</span>-><span class="function">boolean</span>(<span class="number">70</span>);     <span class="comment">// true (70% de chance)</span>
+<span class="variable">$fake</span>-><span class="function">text</span>(<span class="number">200</span>);       <span class="comment">// "Lorem ipsum dolor sit amet..."</span>
+<span class="variable">$fake</span>-><span class="function">phone</span>();          <span class="comment">// "+33612345678"</span>
+<span class="variable">$fake</span>-><span class="function">randomElement</span>([<span class="string">'a'</span>, <span class="string">'b'</span>]); <span class="comment">// "b"</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>DatabaseSeeder &mdash; Entry Point</summary>
+    <div class="details-body">
+      <p>The <code>database/seeders/DatabaseSeeder.php</code> file is the main entry point. It orchestrates calls to other seeders:</p>
+<pre><code><span class="keyword">namespace</span> <span class="type">Database\Seeders</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Core\Migration\Seeder</span>;
+<span class="keyword">use</span> <span class="type">Framework\Core\Migration\FakeDataGenerator</span>;
+<span class="keyword">use</span> <span class="type">Framework\Core\DB</span>;
+
+<span class="keyword">class</span> <span class="type">DatabaseSeeder</span> <span class="keyword">extends</span> <span class="type">Seeder</span>
+{
+    <span class="keyword">public function</span> <span class="function">run</span>(): <span class="type">void</span>
+    {
+        <span class="variable">$fake</span> = <span class="keyword">new</span> <span class="type">FakeDataGenerator</span>();
+
+        <span class="comment">// Insert roles</span>
+        <span class="type">DB</span>::<span class="function">raw</span>(<span class="string">"INSERT INTO roles (name) VALUES ('admin'), ('user') ON CONFLICT DO NOTHING"</span>);
+
+        <span class="comment">// Insert 20 users</span>
+        <span class="keyword">for</span> (<span class="variable">$i</span> = <span class="number">0</span>; <span class="variable">$i</span> &lt; <span class="number">20</span>; <span class="variable">$i</span>++) {
+            <span class="type">DB</span>::<span class="function">raw</span>(
+                <span class="string">"INSERT INTO users (email, name, password_hash, role_id)
+                 VALUES (?, ?, ?, ?)"</span>,
+                [
+                    <span class="variable">$fake</span>-><span class="function">email</span>(),
+                    <span class="variable">$fake</span>-><span class="function">name</span>(),
+                    <span class="function">password_hash</span>(<span class="string">'secret'</span>, <span class="keyword">PASSWORD_BCRYPT</span>),
+                    <span class="variable">$fake</span>-><span class="function">randomElement</span>([<span class="number">1</span>, <span class="number">2</span>]),
+                ]
+            );
+        }
+    }
+}</code></pre>
+      <div class="callout callout-warning">
+        <strong>Test data only.</strong>
+        Never run <code>db:seed</code> in production. Seeders are intended for development and testing.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     4. Cache Redis
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Cache Redis <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The framework provides a Redis-based cache system with tag support for grouped invalidation. The connection is lazy and shared via the DI Container.</p>
+
+  <details open>
+    <summary>RedisConnection &mdash; Shared Wrapper</summary>
+    <div class="details-body">
+      <p><code>RedisConnection</code> wraps the <code>ext-redis</code> extension with a lazy connection. It connects only on the first call:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\Redis\RedisConnection</span>;
+
+<span class="comment">// Creation from environment variables</span>
+<span class="variable">$redis</span> = <span class="type">RedisConnection</span>::<span class="function">fromEnv</span>();
+
+<span class="comment">// Basic operations</span>
+<span class="variable">$redis</span>-><span class="function">set</span>(<span class="string">'cle'</span>, <span class="string">'valeur'</span>, <span class="number">3600</span>);  <span class="comment">// TTL in seconds</span>
+<span class="variable">$redis</span>-><span class="function">get</span>(<span class="string">'cle'</span>);                    <span class="comment">// "valeur"</span>
+<span class="variable">$redis</span>-><span class="function">exists</span>(<span class="string">'cle'</span>);                 <span class="comment">// true</span>
+<span class="variable">$redis</span>-><span class="function">del</span>(<span class="string">'cle'</span>);                    <span class="comment">// delete</span>
+<span class="variable">$redis</span>-><span class="function">incr</span>(<span class="string">'compteur'</span>);             <span class="comment">// atomically increment</span>
+<span class="variable">$redis</span>-><span class="function">ping</span>();                        <span class="comment">// verify connection</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>RedisCache &mdash; get / set / has / forget / remember / flush</summary>
+    <div class="details-body">
+      <p><code>RedisCache</code> adds a JSON serialization layer and an automatic <code>cache:</code> prefix:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\Cache\RedisCache</span>;
+
+<span class="variable">$cache</span> = <span class="keyword">new</span> <span class="type">RedisCache</span>(<span class="variable">$redis</span>);
+
+<span class="comment">// Stocker une valeur (TTL by default : 3600s)</span>
+<span class="variable">$cache</span>-><span class="function">set</span>(<span class="string">'users.count'</span>, <span class="number">42</span>, <span class="number">600</span>);
+
+<span class="comment">// Retrieve</span>
+<span class="variable">$count</span> = <span class="variable">$cache</span>-><span class="function">get</span>(<span class="string">'users.count'</span>);  <span class="comment">// 42</span>
+
+<span class="comment">// Check existence</span>
+<span class="variable">$cache</span>-><span class="function">has</span>(<span class="string">'users.count'</span>);  <span class="comment">// true</span>
+
+<span class="comment">// Delete a key</span>
+<span class="variable">$cache</span>-><span class="function">forget</span>(<span class="string">'users.count'</span>);
+
+<span class="comment">// Clear all cache</span>
+<span class="variable">$cache</span>-><span class="function">flush</span>();</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>The Cache::remember() pattern</summary>
+    <div class="details-body">
+      <p><code>remember()</code> is the most used pattern: it returns the cached value if it exists, otherwise executes the callback, stores the result and returns it:</p>
+<pre><code><span class="comment">// If the key exists in cache → return directly</span>
+<span class="comment">// Otherwise → execute the query, store for 10 min, return</span>
+<span class="variable">$users</span> = <span class="variable">$cache</span>-><span class="function">remember</span>(<span class="string">'users.active'</span>, <span class="number">600</span>, <span class="keyword">function</span> () {
+    <span class="keyword">return</span> <span class="type">User</span>::<span class="function">with</span>(<span class="string">'role'</span>)
+        -><span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+        -><span class="function">get</span>();
+});</code></pre>
+      <div class="callout callout-info">
+        <strong>Ideal for frequently read data.</strong>
+        Configuration lists, counters, external API results... Anything that does not change on each request benefits from <code>remember()</code>.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>TaggedCache &mdash; Grouped Invalidation</summary>
+    <div class="details-body">
+      <p><code>TaggedCache</code> allows associating tags with your cache keys, then deleting all keys of a tag in a single operation:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\Cache\TaggedCache</span>;
+
+<span class="comment">// Create a tagged cache</span>
+<span class="variable">$tagged</span> = <span class="keyword">new</span> <span class="type">TaggedCache</span>(<span class="variable">$cache</span>, [<span class="string">'users'</span>]);
+
+<span class="comment">// Store with the 'users' tag</span>
+<span class="variable">$tagged</span>-><span class="function">set</span>(<span class="string">'users.list'</span>, <span class="variable">$allUsers</span>, <span class="number">3600</span>);
+<span class="variable">$tagged</span>-><span class="function">set</span>(<span class="string">'users.count'</span>, <span class="number">150</span>, <span class="number">3600</span>);
+<span class="variable">$tagged</span>-><span class="function">set</span>(<span class="string">'users.active'</span>, <span class="variable">$activeUsers</span>, <span class="number">3600</span>);
+
+<span class="comment">// When a user is modified → invalidate everything at once</span>
+<span class="variable">$tagged</span>-><span class="function">flush</span>();
+<span class="comment">// Supprime users.list, users.count ET users.active</span></code></pre>
+      <p>Tags are stored as Redis SETs (<code>tag:users</code>) containing the associated keys. L'appel a <code>flush()</code> iterates the SET, deletes each key, then deletes the SET itself.</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Redis Configuration</summary>
+    <div class="details-body">
+      <p>Configure Redis via environment variables in your <code>.env</code> file:</p>
+<pre><code><span class="comment"># .env</span>
+<span class="variable">REDIS_HOST</span>=<span class="string">127.0.0.1</span>
+<span class="variable">REDIS_PORT</span>=<span class="number">6379</span>
+<span class="variable">REDIS_PASSWORD</span>=           <span class="comment"># vide by default</span>
+<span class="variable">REDIS_DB</span>=<span class="number">0</span>
+<span class="variable">REDIS_PREFIX</span>=<span class="string">app:</span></code></pre>
+      <div class="callout callout-info">
+        <strong>Automatic prefix.</strong>
+        All keys are prefixed by <code>REDIS_PREFIX</code> (defaut : <code>app:</code>) then by <code>cache:</code> in RedisCache. The key <code>users.count</code> becomes <code>app:cache:users.count</code> in Redis.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     5. docker-compose
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">5</span> docker-compose <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The project includes a <code>docker-compose.yml</code> file that starts the FrankenPHP API, PostgreSQL and Redis in a single command. Ideal for local development.</p>
+
+  <details open>
+    <summary>Start the environment</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Start all services in background</span>
+<span class="keyword">docker compose</span> <span class="function">up</span> <span class="string">-d</span>
+
+<span class="comment"># Verify everything is running</span>
+<span class="keyword">docker compose</span> <span class="function">ps</span>
+
+<span class="comment"># View logs in real-time</span>
+<span class="keyword">docker compose</span> <span class="function">logs</span> <span class="string">-f</span>
+
+<span class="comment"># Stop the environment</span>
+<span class="keyword">docker compose</span> <span class="function">down</span></code></pre>
+      <p>On first launch, Docker builds the application image from the <code>Dockerfile.frankenphp</code>. The <code>postgres</code> and <code>redis</code> services use lightweight Alpine images.</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary>The three services</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Service</th><th>Image</th><th>Port</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>app</code></td>
+            <td>Dockerfile.frankenphp</td>
+            <td><span class="number">8080</span></td>
+            <td>PHP API with FrankenPHP in worker mode</td>
+          </tr>
+          <tr>
+            <td><code>postgres</code></td>
+            <td>postgres:16-alpine</td>
+            <td><span class="number">5432</span></td>
+            <td>PostgreSQL 16 database</td>
+          </tr>
+          <tr>
+            <td><code>redis</code></td>
+            <td>redis:7-alpine</td>
+            <td><span class="number">6379</span></td>
+            <td>Cache and broker Redis 7</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>The application waits for PostgreSQL and Redis to be healthy (<code>healthcheck</code>) before starting thanks to <code>depends_on</code> with <code>condition: service_healthy</code>.</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Volumes and hot-reload</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># docker-compose.yml (extrait)</span>
+<span class="variable">services</span>:
+  <span class="variable">app</span>:
+    <span class="variable">volumes</span>:
+      - <span class="string">.:/app</span>           <span class="comment"># Mount source code in /app</span>
+    <span class="variable">env_file</span>: <span class="string">.env</span>      <span class="comment"># Load environment variables</span>
+
+  <span class="variable">postgres</span>:
+    <span class="variable">volumes</span>:
+      - <span class="string">pgdata:/var/lib/postgresql/data</span>  <span class="comment"># Persisted data</span>
+
+  <span class="variable">redis</span>:
+    <span class="variable">volumes</span>:
+      - <span class="string">redisdata:/data</span>                  <span class="comment"># Persisted data</span>
+
+<span class="variable">volumes</span>:
+  <span class="variable">pgdata</span>:      <span class="comment"># Named volume for PostgreSQL</span>
+  <span class="variable">redisdata</span>:   <span class="comment"># Named volume for Redis</span></code></pre>
+      <div class="callout callout-info">
+        <strong>Hot-reload in development.</strong>
+        The <code>.:/app</code> volume mounts your working directory directly in the container. Any PHP file change is immediately picked up by FrankenPHP without rebuilding the image.
+      </div>
+      <div class="callout callout-warning">
+        <strong>Persisted data.</strong>
+        The <code>pgdata</code> and <code>redisdata</code> volumes survive <code>docker compose down</code>. To reset everything, use <code>docker compose down -v</code> which also deletes the volumes.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     Pagination
+     ═══════════════════════════════════════════ -->
+
+<div class="pagination">
+  <a href="09-profiler-security.html" class="prev">Profiler &amp; Securite</a>
+  <a href="11-scheduler-queue.html" class="next">Scheduler, Queue &amp; Feature Flags</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

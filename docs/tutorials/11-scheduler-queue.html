@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>11 — Scheduler, Queue & Feature Flags</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Scheduler, Queue &amp; Feature Flags</h1>
+  <p>Scheduled tasks, async jobs, flags and state machines</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 11 &mdash; Scheduler, Queue &amp; Feature Flags</div>
+
+<!-- ═══════════════════════════════════════════
+     1. Scheduler + Redis Lock
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Scheduler + Redis Lock <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The Scheduler allows defining scheduled tasks with a fluent API. Combined with a Redis lock, it guarantees that only one instance executes even in a Kubernetes cluster.</p>
+
+  <details open>
+    <summary>Configuration in app/Schedule.php</summary>
+    <div class="details-body">
+      <p>Define your scheduled tasks in the <code>app/Schedule.php</code> file using the fluent API:</p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Scheduler\Schedule</span>;
+
+<span class="keyword">return function</span> (<span class="type">Schedule</span> <span class="variable">$schedule</span>): <span class="keyword">void</span> {
+
+    <span class="comment">// Clean expired tokens every 5 minutes</span>
+    <span class="variable">$schedule</span>-><span class="function">call</span>(<span class="keyword">fn</span>() => <span class="type">Token</span>::<span class="function">deleteExpired</span>())
+        -><span class="function">everyFiveMinutes</span>()
+        -><span class="function">name</span>(<span class="string">'tokens:cleanup'</span>);
+
+    <span class="comment">// Daily report at 2 AM</span>
+    <span class="variable">$schedule</span>-><span class="function">call</span>(<span class="keyword">fn</span>() => <span class="type">ReportService</span>::<span class="function">daily</span>())
+        -><span class="function">dailyAt</span>(<span class="string">'02:00'</span>)
+        -><span class="function">name</span>(<span class="string">'reports:daily'</span>);
+
+    <span class="comment">// External sync every hour</span>
+    <span class="variable">$schedule</span>-><span class="function">call</span>(<span class="keyword">fn</span>() => <span class="type">ExternalSync</span>::<span class="function">run</span>())
+        -><span class="function">hourly</span>()
+        -><span class="function">name</span>(<span class="string">'sync:external'</span>);
+};</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Redis Lock &mdash; preventing duplicates in K8s</summary>
+    <div class="details-body">
+      <p>In a multi-pod environment (Kubernetes), multiple workers execute <code>Scheduler::tick()</code> simultaneously. The Scheduler uses a distributed Redis lock to guarantee that only one instance executes each task:</p>
+      <div class="diagram">
+<pre>
+Pod A  ──► Scheduler::tick()  ──► Redis SET task:tokens:cleanup NX EX 300
+                                        ✓ Lock acquired → execute the task
+
+Pod B  ──► Scheduler::tick()  ──► Redis SET task:tokens:cleanup NX EX 300
+                                        ✗ Lock exists → skip
+
+Pod C  ──► Scheduler::tick()  ──► Redis SET task:tokens:cleanup NX EX 300
+                                        ✗ Lock exists → skip
+</pre>
+      </div>
+<pre><code><span class="comment">// The Redis lock uses SET NX EX (atomic)</span>
+<span class="comment">// NX = only if the key does not exist</span>
+<span class="comment">// EX = automatic expiration (TTL = task duration + margin)</span>
+<span class="variable">$redis</span>-><span class="function">set</span>(
+    <span class="string">"scheduler:lock:</span><span class="variable">{$task->name()}</span><span class="string">"</span>,
+    <span class="function">gethostname</span>(),
+    [<span class="string">'NX'</span>, <span class="string">'EX'</span> => <span class="number">300</span>]
+);</code></pre>
+      <div class="callout callout-info">
+        <strong>Security./strong>
+        Le TTL du lock est toujours superieur a la duree prevue de la tache. Si un pod crash, le lock expire automatically et un autre pod prend le relais.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Execution in the FrankenPHP worker</summary>
+    <div class="details-body">
+      <p><code>Scheduler::tick()</code> est appele dans la boucle du worker FrankenPHP. Il est automatically throttle a 60 secondes pour ne pas surcharger le systeme :</p>
+<pre><code><span class="comment">// Dans le worker loop FrankenPHP</span>
+<span class="keyword">while</span> (<span class="function">frankenphp_handle_request</span>(<span class="variable">$handler</span>)) {
+    <span class="comment">// HTTP request processing...</span>
+
+    <span class="comment">// The tick checks if 60s have elapsed since the last check</span>
+    <span class="type">Scheduler</span>::<span class="function">tick</span>();  <span class="comment">// Internal throttle: max 1x / 60s</span>
+}</code></pre>
+      <div class="callout callout-warning">
+        <strong>Required environment variable.</strong>
+        The scheduler only activates if <code>SCHEDULER_ENABLED=1</code> is defined in your <code>.env</code>. Without this variable, <code>tick()</code> is a no-op.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Manual execution (one-shot)</summary>
+    <div class="details-body">
+      <p>To execute all scheduled tasks immediately (useful in dev or in a classic cron):</p>
+<pre><code><span class="comment"># Execute all eligible tasks now</span>
+<span class="keyword">./forge</span> <span class="function">schedule:run</span>
+
+<span class="comment"># List configured tasks</span>
+<span class="keyword">./forge</span> <span class="function">schedule:list</span></code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     2. Job Queue
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Job Queue <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The job queue allows executing heavy tasks in the background (sending emails, image processing, external sync) without blocking the HTTP request.</p>
+
+  <details open>
+    <summary>Dispatch a job</summary>
+    <div class="details-body">
+      <p>Use <code>Job::dispatch()</code> to add a job to the queue:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Queue\Job</span>;
+
+<span class="comment">// Dispatch a job avec des parametres</span>
+<span class="type">Job</span>::<span class="function">dispatch</span>(<span class="type">SendEmail</span>::<span class="keyword">class</span>, [
+    <span class="string">'user_id'</span> => <span class="number">1</span>,
+    <span class="string">'template'</span> => <span class="string">'welcome'</span>,
+]);
+
+<span class="comment">// Dispatch with a delay (in seconds)</span>
+<span class="type">Job</span>::<span class="function">dispatch</span>(<span class="type">GenerateReport</span>::<span class="keyword">class</span>, [
+    <span class="string">'month'</span> => <span class="string">'2026-03'</span>,
+])-><span class="function">delay</span>(<span class="number">60</span>);
+
+<span class="comment">// Dispatch to a specific queue</span>
+<span class="type">Job</span>::<span class="function">dispatch</span>(<span class="type">ProcessImage</span>::<span class="keyword">class</span>, [
+    <span class="string">'path'</span> => <span class="string">'/uploads/photo.jpg'</span>,
+])-><span class="function">onQueue</span>(<span class="string">'images'</span>);</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Consume jobs</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Run the queue worker (daemon mode)</span>
+<span class="keyword">./forge</span> <span class="function">queue:work</span>
+
+<span class="comment"># Worker on a specific queue</span>
+<span class="keyword">./forge</span> <span class="function">queue:work</span> --queue=images
+
+<span class="comment"># Process a single job then exit</span>
+<span class="keyword">./forge</span> <span class="function">queue:work</span> --once</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Drivers : Redis vs Database</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Driver</th><th>Command</th><th>Advantages</th><th>Disadvantages</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>redis</code></td>
+            <td><code>BLPOP queue:default 30</code></td>
+            <td>Ultra-fast, instant notification</td>
+            <td>Possible loss if Redis crashes without persistence</td>
+          </tr>
+          <tr>
+            <td><code>database</code></td>
+            <td><code>SELECT ... FOR UPDATE SKIP LOCKED</code></td>
+            <td>Durable, no external dependency</td>
+            <td>Slower, polling required</td>
+          </tr>
+        </tbody>
+      </table>
+<pre><code><span class="comment"># .env</span>
+<span class="variable">QUEUE_DRIVER</span>=<span class="string">redis</span>     <span class="comment"># redis | database</span>
+<span class="variable">QUEUE_PREFIX</span>=<span class="string">app:queue:</span></code></pre>
+      <div class="diagram">
+<pre>
+Driver Redis :
+  Controller ──► LPUSH queue:default {job_payload}
+                      │
+  Worker     ──► BLPOP queue:default 30  ──► deserialize ──► execute
+
+Driver Database :
+  Controller ──► INSERT INTO jobs (queue, payload, available_at, ...)
+                      │
+  Worker     ──► SELECT * FROM jobs WHERE queue = 'default'
+                   AND available_at <= NOW()
+                   ORDER BY id
+                   FOR UPDATE SKIP LOCKED
+                   LIMIT 1
+</pre>
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Retry and failure handling</summary>
+    <div class="details-body">
+      <p>Each job can define its retry policy:</p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Jobs</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Queue\AbstractJob</span>;
+
+<span class="keyword">class</span> <span class="type">SendEmail</span> <span class="keyword">extends</span> <span class="type">AbstractJob</span>
+{
+    <span class="keyword">public int</span> <span class="variable">$maxRetries</span> = <span class="number">3</span>;       <span class="comment">// Maximum number of attempts</span>
+    <span class="keyword">public int</span> <span class="variable">$retryDelay</span> = <span class="number">30</span>;      <span class="comment">// Delay between each retry (seconds)</span>
+
+    <span class="keyword">public function</span> <span class="function">handle</span>(): <span class="keyword">void</span>
+    {
+        <span class="variable">$user</span> = <span class="type">User</span>::<span class="function">find</span>(<span class="variable">$this</span>-><span class="variable">data</span>[<span class="string">'user_id'</span>]);
+        <span class="type">Mailer</span>::<span class="function">send</span>(<span class="variable">$user</span>-><span class="variable">email</span>, <span class="variable">$this</span>-><span class="variable">data</span>[<span class="string">'template'</span>]);
+    }
+
+    <span class="keyword">public function</span> <span class="function">failed</span>(<span class="type">\Throwable</span> <span class="variable">$e</span>): <span class="keyword">void</span>
+    {
+        <span class="comment">// Called after maxRetries failures</span>
+        <span class="function">error_log</span>(<span class="string">"Job SendEmail failed: "</span> . <span class="variable">$e</span>-><span class="function">getMessage</span>());
+    }
+}</code></pre>
+      <p>Jobs that fail after all attempts are moved to the <code>failed_jobs</code> table:</p>
+<pre><code><span class="comment"># View failed jobs</span>
+<span class="keyword">./forge</span> <span class="function">queue:failed</span>
+
+<span class="comment"># Retry a failed job by its ID</span>
+<span class="keyword">./forge</span> <span class="function">queue:retry</span> --id=<span class="number">5</span>
+
+<span class="comment"># Retry all failed jobs</span>
+<span class="keyword">./forge</span> <span class="function">queue:retry</span> --all</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Generate a job with the CLI</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Create a new job in app/Jobs/</span>
+<span class="keyword">./forge</span> <span class="function">make:job</span> SendWelcomeEmail</code></pre>
+      <p>This generates the <code>app/Jobs/SendWelcomeEmail.php</code> file with the base structure ready to use.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     3. Feature Flags
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> Feature Flags <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>Feature Flags allow enabling or disabling features without deployment. Ideal for progressive releases, A/B testing, and emergency killswitches.</p>
+
+  <details open>
+    <summary>Simple check</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Feature\FeatureFlag</span>;
+
+<span class="comment">// Check if a feature is active</span>
+<span class="keyword">if</span> (<span class="type">FeatureFlag</span>::<span class="function">enabled</span>(<span class="string">'new-api'</span>)) {
+    <span class="comment">// New API v2 logic</span>
+    <span class="keyword">return</span> <span class="variable">$this</span>-><span class="function">handleV2</span>(<span class="variable">$request</span>);
+}
+
+<span class="comment">// Fallback to old logic</span>
+<span class="keyword">return</span> <span class="variable">$this</span>-><span class="function">handleV1</span>(<span class="variable">$request</span>);</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Conditional flags (by role)</summary>
+    <div class="details-body">
+      <p>Flags can be targeted by user role for progressive deployment:</p>
+<pre><code><span class="comment">// Active only for admins</span>
+<span class="keyword">if</span> (<span class="type">FeatureFlag</span>::<span class="function">for</span>(<span class="string">'beta'</span>)-><span class="function">whenRole</span>(<span class="string">'admin'</span>)-><span class="function">enabled</span>()) {
+    <span class="comment">// Beta interface reserved for admins</span>
+}
+
+<span class="comment">// Active for multiple roles</span>
+<span class="keyword">if</span> (<span class="type">FeatureFlag</span>::<span class="function">for</span>(<span class="string">'dashboard-v2'</span>)-><span class="function">whenRole</span>(<span class="string">'admin'</span>, <span class="string">'manager'</span>)-><span class="function">enabled</span>()) {
+    <span class="comment">// New dashboard</span>
+}</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Enable / disable programmatically</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Enable a feature</span>
+<span class="type">FeatureFlag</span>::<span class="function">activate</span>(<span class="string">'dark-mode'</span>);
+
+<span class="comment">// Disable a feature</span>
+<span class="type">FeatureFlag</span>::<span class="function">deactivate</span>(<span class="string">'dark-mode'</span>);</code></pre>
+      <div class="callout callout-info">
+        <strong>Redis cache (60s) + DB fallback.</strong>
+        Flags are cached in Redis for 60 seconds. If Redis is unavailable, the system queries the database directly. Changes via <code>activate()</code> / <code>deactivate()</code> invalidate the cache immediately.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Management via CLI</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Enable a flag</span>
+<span class="keyword">./forge</span> <span class="function">feature</span> enable dark-mode
+
+<span class="comment"># Disable a flag</span>
+<span class="keyword">./forge</span> <span class="function">feature</span> disable dark-mode
+
+<span class="comment"># List all flags and their status</span>
+<span class="keyword">./forge</span> <span class="function">feature</span> list</code></pre>
+      <p>Example output of <code>feature list</code> :</p>
+<pre><code><span class="comment">+----------------+--------+------------+
+| Flag           | Status | Conditions |
++----------------+--------+------------+
+| new-api        | ON     | —          |
+| dark-mode      | OFF    | —          |
+| beta           | ON     | role:admin |
+| dashboard-v2   | OFF    | —          |
++----------------+--------+------------+</span></code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     4. State Machine
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> State Machine <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The state machine allows modeling complex workflows (orders, tickets, approval processes) with validated transitions and automatic events.</p>
+
+  <details open>
+    <summary>Define a state machine</summary>
+    <div class="details-body">
+      <p>Use the <code>#[StateMachine]</code> attribute on your model and the <code>HasStateMachine</code> trait:</p>
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Models</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\ORM\Model</span>;
+<span class="keyword">use</span> <span class="type">Framework\StateMachine\HasStateMachine</span>;
+<span class="keyword">use</span> <span class="type">Framework\StateMachine\StateMachine</span>;
+
+#[<span class="type">StateMachine</span>(
+    <span class="string">column</span>: <span class="string">'status'</span>,
+    <span class="string">states</span>: [<span class="string">'draft'</span>, <span class="string">'pending'</span>, <span class="string">'confirmed'</span>, <span class="string">'shipped'</span>, <span class="string">'delivered'</span>, <span class="string">'cancelled'</span>],
+    <span class="string">transitions</span>: [
+        <span class="string">'submit'</span>  => [<span class="string">'from'</span> => <span class="string">'draft'</span>,     <span class="string">'to'</span> => <span class="string">'pending'</span>],
+        <span class="string">'confirm'</span> => [<span class="string">'from'</span> => <span class="string">'pending'</span>,   <span class="string">'to'</span> => <span class="string">'confirmed'</span>],
+        <span class="string">'ship'</span>    => [<span class="string">'from'</span> => <span class="string">'confirmed'</span>, <span class="string">'to'</span> => <span class="string">'shipped'</span>],
+        <span class="string">'deliver'</span> => [<span class="string">'from'</span> => <span class="string">'shipped'</span>,   <span class="string">'to'</span> => <span class="string">'delivered'</span>],
+        <span class="string">'cancel'</span>  => [<span class="string">'from'</span> => [<span class="string">'draft'</span>, <span class="string">'pending'</span>], <span class="string">'to'</span> => <span class="string">'cancelled'</span>],
+    ]
+)]
+<span class="keyword">class</span> <span class="type">Order</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">use</span> <span class="type">HasStateMachine</span>;
+
+    <span class="keyword">protected string</span> <span class="variable">$table</span> = <span class="string">'orders'</span>;
+}</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Use transitions</summary>
+    <div class="details-body">
+<pre><code><span class="variable">$order</span> = <span class="type">Order</span>::<span class="function">find</span>(<span class="number">42</span>);
+
+<span class="comment">// Check if a transition is possible</span>
+<span class="variable">$order</span>-><span class="function">canTransitionTo</span>(<span class="string">'shipped'</span>);    <span class="comment">// true si etat = confirmed</span>
+
+<span class="comment">// Perform the transition</span>
+<span class="variable">$order</span>-><span class="function">transitionTo</span>(<span class="string">'shipped'</span>);      <span class="comment">// Changes the status + saves to DB</span>
+
+<span class="comment">// List available transitions from the current state</span>
+<span class="variable">$order</span>-><span class="function">availableTransitions</span>();
+<span class="comment">// Ex: si etat = 'pending' → ['confirm', 'cancel']</span></code></pre>
+      <div class="callout callout-danger">
+        <strong>Invalid transition.</strong>
+        Calling <code>transitionTo()</code> to an unauthorized state throws an <code>InvalidTransitionException</code>. Always use <code>canTransitionTo()</code> first in a user context.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Automatic events</summary>
+    <div class="details-body">
+      <p>Chaque transition dispatch automatically des evenements que vous pouvez ecouter :</p>
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\Event</span>;
+
+<span class="comment">// Event before the transition</span>
+<span class="type">Event</span>::<span class="function">listen</span>(<span class="string">'order.transitioning:shipped'</span>, <span class="keyword">function</span> (<span class="variable">$order</span>) {
+    <span class="comment">// Validate stock, prepare shipment...</span>
+});
+
+<span class="comment">// Event after the transition</span>
+<span class="type">Event</span>::<span class="function">listen</span>(<span class="string">'order.transitioned:shipped'</span>, <span class="keyword">function</span> (<span class="variable">$order</span>) {
+    <span class="comment">// Send a notification to the client</span>
+    <span class="type">Job</span>::<span class="function">dispatch</span>(<span class="type">SendShippingNotification</span>::<span class="keyword">class</span>, [
+        <span class="string">'order_id'</span> => <span class="variable">$order</span>-><span class="variable">id</span>,
+    ]);
+});</code></pre>
+      <div class="diagram">
+<pre>
+                    ┌─────────┐    submit     ┌─────────┐
+                    │  draft  │──────────────►│ pending │
+                    └─────────┘               └────┬────┘
+                                                   │
+                                    confirm ▼      │ cancel
+                                          ┌──────────┐     ┌───────────┐
+                                          │confirmed │     │ cancelled │
+                                          └────┬─────┘     └───────────┘
+                                               │
+                                          ship │
+                                               ▼
+                                          ┌─────────┐
+                                          │ shipped │
+                                          └────┬────┘
+                                               │
+                                       deliver │
+                                               ▼
+                                          ┌───────────┐
+                                          │ delivered │
+                                          └───────────┘
+</pre>
+      </div>
+      <div class="callout callout-info">
+        <strong>Convention de nommage.</strong>
+        Les evenements suivent le pattern <code>{model}.transitioning:{etat}</code> (avant) et <code>{model}.transitioned:{etat}</code> (apres). Le nom du model est derive automatically du nom de la classe en minuscules.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     Pagination
+     ═══════════════════════════════════════════ -->
+
+<div class="pagination">
+  <a href="10-migrations-cache.html" class="prev">Migrations, Seeding &amp; Cache</a>
+  <a href="12-notifications-oauth.html" class="next">Notifications, SSE &amp; OAuth</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

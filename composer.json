@@ -1,0 +1,46 @@
+{
+    "name": "fennectra/framework",
+    "description": "Fennectra — PHP 8.3+ high-performance MVC API framework with built-in compliance (SOC 2, ISO 27001, NF525, GDPR)",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["php", "framework", "api", "mvc", "jwt", "orm", "frankenphp"],
+    "homepage": "https://github.com/fennectra/framework",
+    "autoload": {
+        "psr-4": {
+            "Fennec\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": ">=8.2",
+        "monolog/monolog": "^3.0",
+        "firebase/php-jwt": "^7.0",
+        "dompdf/dompdf": "^3.1",
+        "aws/aws-sdk-php": "^3.373",
+        "google/cloud-storage": "^1.49",
+        "intervention/image": "^3.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0",
+        "phpstan/phpstan": "^2.1",
+        "friendsofphp/php-cs-fixer": "^3.94"
+    },
+    "bin": ["bin/cli"],
+    "scripts": {
+        "test": "phpunit --configuration config/phpunit.xml",
+        "lint": "php-cs-fixer check --config=config/.php-cs-fixer.php --diff",
+        "lint:fix": "php-cs-fixer fix --config=config/.php-cs-fixer.php",
+        "analyse": "phpstan analyse --configuration=config/phpstan.neon --no-progress"
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "1.0-dev"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

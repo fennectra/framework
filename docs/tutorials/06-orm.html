@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 — ORM & Query Builder</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>ORM &amp; Query Builder</h1>
+  <p>Models, relations, fluent queries and DTO validation</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 06 &mdash; ORM</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     1. Defining a Model
+     ═══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Defining a Model <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>Each model extends <code>Framework\Core\Model</code> and declares its table via the <code>#[Table]</code> or the static property <code>$table</code>. Relations are simple methods that call <code>belongsTo</code>, <code>hasMany</code> ou <code>hasOne</code>.</p>
+
+  <details open>
+    <summary>User.php &mdash; Full example</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Models</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Attributes\Table</span>;
+<span class="keyword">use</span> <span class="type">Framework\Core\Model</span>;
+<span class="keyword">use</span> <span class="type">Framework\Core\Collection</span>;
+
+<span class="comment">// The #[Table] attribute links the model to the SQL table</span>
+#[<span class="type">Table</span>(<span class="string">'users'</span>)]
+<span class="keyword">class</span> <span class="type">User</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="comment">// Alternative: static property (takes priority over the attribute)</span>
+    <span class="keyword">protected static</span> <span class="type">string</span> <span class="variable">$table</span> = <span class="string">'users'</span>;
+
+    <span class="comment">// Automatic column casting</span>
+    <span class="keyword">protected static</span> <span class="type">array</span> <span class="variable">$casts</span> = [
+        <span class="string">'is_active'</span>      =&gt; <span class="string">'bool'</span>,
+        <span class="string">'role_id'</span>        =&gt; <span class="string">'int'</span>,
+        <span class="string">'credit_base'</span>    =&gt; <span class="string">'json'</span>,
+        <span class="string">'current_credit'</span> =&gt; <span class="string">'int'</span>,
+    ];
+
+    <span class="comment">// BelongsTo relation: User -&gt; Role</span>
+    <span class="keyword">public function</span> <span class="function">role</span>(): ?<span class="type">Role</span>
+    {
+        <span class="keyword">return</span> <span class="variable">$this</span>-&gt;<span class="function">belongsTo</span>(<span class="type">Role</span>::<span class="keyword">class</span>, <span class="string">'role_id'</span>);
+    }
+
+    <span class="comment">// HasMany relation: User -&gt; Posts</span>
+    <span class="keyword">public function</span> <span class="function">posts</span>(): <span class="type">Collection</span>
+    {
+        <span class="keyword">return</span> <span class="variable">$this</span>-&gt;<span class="function">hasMany</span>(<span class="type">Post</span>::<span class="keyword">class</span>, <span class="string">'user_id'</span>);
+    }
+}</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Available static properties</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>$table</code></td><td>string</td><td><code>''</code></td><td>SQL table name (otherwise inferred from class name)</td></tr>
+          <tr><td><code>$primaryKey</code></td><td>string</td><td><code>'id'</code></td><td>Primary key</td></tr>
+          <tr><td><code>$connection</code></td><td>string</td><td><code>'default'</code></td><td>DB connection name</td></tr>
+          <tr><td><code>$timestamps</code></td><td>bool</td><td><code>true</code></td><td>Automatic management of <code>created_at</code> / <code>updated_at</code></td></tr>
+          <tr><td><code>$softDeletes</code></td><td>bool</td><td><code>false</code></td><td>Enables soft delete via <code>deleted_at</code></td></tr>
+          <tr><td><code>$casts</code></td><td>array</td><td><code>[]</code></td><td>Casting : <code>int</code>, <code>float</code>, <code>bool</code>, <code>string</code>, <code>json</code>, <code>array</code>, <code>datetime</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        <strong>Naming convention:</strong>
+        Si <code>$table</code> est vide et qu'il n'y a pas d'attribut <code>#[Table]</code>, the framework infers the name : <code>UserProfile</code> &rarr; <code>user_profiles</code> (snake_case + pluriel).
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     2. CRUD Operations
+     ═══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> CRUD Operations <span class="badge badge-beginner">Beginner</span></h2>
+
+  <details open>
+    <summary>Read Lire &mdash; findmdash; find, findOrFail, all, where</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Find by primary key (returns null if not found)</span>
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">find</span>(<span class="number">42</span>);
+
+<span class="comment">// Find or throw an HttpException 404</span>
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">findOrFail</span>(<span class="number">42</span>);
+
+<span class="comment">// Retrieve all records (returns a Collection)</span>
+<span class="variable">$users</span> = <span class="type">User</span>::<span class="function">all</span>();
+
+<span class="comment">// Count records</span>
+<span class="variable">$total</span> = <span class="type">User</span>::<span class="function">count</span>();
+
+<span class="comment">// Conditional query (returns a ModelQueryBuilder)</span>
+<span class="variable">$admins</span> = <span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">where</span>(<span class="string">'role_id'</span>, <span class="number">1</span>)
+    -&gt;<span class="function">get</span>();</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Create Creer &mdash; createmdash; create, save (insert)</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Method 1: create() — instantiates + persists in one line</span>
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">create</span>([
+    <span class="string">'email'</span>     =&gt; <span class="string">'alice@example.com'</span>,
+    <span class="string">'role_id'</span>   =&gt; <span class="number">2</span>,
+    <span class="string">'is_active'</span> =&gt; <span class="keyword">true</span>,
+]);
+<span class="comment">// $user-&gt;id is now populated (lastInsertId)</span>
+
+<span class="comment">// Method 2: new + fill + save</span>
+<span class="variable">$user</span> = <span class="keyword">new</span> <span class="type">User</span>();
+<span class="variable">$user</span>-&gt;<span class="variable">email</span> = <span class="string">'bob@example.com'</span>;
+<span class="variable">$user</span>-&gt;<span class="variable">role_id</span> = <span class="number">3</span>;
+<span class="variable">$user</span>-&gt;<span class="function">save</span>();  <span class="comment">// INSERT — timestamps auto-filled</span></code></pre>
+      <div class="callout callout-info">
+        <strong>Event:</strong> After an insert, l'evenement <code>App\Models\User.created</code> is dispatched automatically.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Update Modifier &mdash; savemdash; save (update), update</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Update an existing model</span>
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">findOrFail</span>(<span class="number">42</span>);
+<span class="variable">$user</span>-&gt;<span class="variable">email</span> = <span class="string">'newemail@example.com'</span>;
+<span class="variable">$user</span>-&gt;<span class="function">save</span>();  <span class="comment">// UPDATE — only changed fields (dirty) are sent</span>
+
+<span class="comment">// Check if a field has changed</span>
+<span class="variable">$user</span>-&gt;<span class="function">isDirty</span>(<span class="string">'email'</span>);   <span class="comment">// true/false</span>
+<span class="variable">$user</span>-&gt;<span class="function">getDirty</span>();           <span class="comment">// ['email' =&gt; 'newemail@...']</span>
+
+<span class="comment">// Bulk update via QueryBuilder</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">false</span>)
+    -&gt;<span class="function">update</span>([<span class="string">'is_active'</span> =&gt; <span class="keyword">true</span>]);</code></pre>
+      <div class="callout callout-info">
+        <strong>Event:</strong> After an update, l'evenement <code>App\Models\User.updated</code> est dispatche.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Delete Supprimer &mdash; deletemdash; delete, forceDelete, restore (soft delete)</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Standard deletion (or soft delete if $softDeletes = true)</span>
+<span class="variable">$user</span>-&gt;<span class="function">delete</span>();
+
+<span class="comment">// Permanent deletion (ignores soft delete)</span>
+<span class="variable">$user</span>-&gt;<span class="function">forceDelete</span>();
+
+<span class="comment">// Restore a soft-deleted model</span>
+<span class="variable">$user</span>-&gt;<span class="function">restore</span>();
+
+<span class="comment">// Check if a model is soft-deleted</span>
+<span class="variable">$user</span>-&gt;<span class="function">isDeleted</span>();  <span class="comment">// true/false</span></code></pre>
+
+      <p>To enable soft delete on a model :</p>
+
+<pre><code><span class="keyword">class</span> <span class="type">Article</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">protected static</span> <span class="type">bool</span> <span class="variable">$softDeletes</span> = <span class="keyword">true</span>;
+    <span class="comment">// deleted_at is automatically excluded from SELECTs</span>
+}</code></pre>
+
+      <p>Queries with deleted records :</p>
+
+<pre><code><span class="comment">// Include soft-deleted</span>
+<span class="variable">$all</span> = <span class="type">Article</span>::<span class="function">withTrashed</span>()-&gt;<span class="function">get</span>();
+
+<span class="comment">// Only soft-deleted</span>
+<span class="variable">$trashed</span> = <span class="type">Article</span>::<span class="function">onlyTrashed</span>()-&gt;<span class="function">get</span>();</code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     3. Query Builder
+     ═══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> Query Builder &mdash; Fluent API <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>Le <code>QueryBuilder</code> builds SQL queries via a chainable interface. Each call returns <code>$this</code>, enabling fluent composition. Parameters are automatically prepared (<code>:qb_p0</code>, <code>:qb_p1</code>, ...) to prevent SQL injection.</p>
+
+  <details open>
+    <summary>Methodes de filtrage (WHERE)</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// where(column, value) — egalite implicite</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+
+<span class="comment">// where(column, operator, value) — operateur explicite</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'age'</span>, <span class="string">'&gt;'</span>, <span class="number">18</span>)
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'name'</span>, <span class="string">'LIKE'</span>, <span class="string">'%Alice%'</span>)
+
+<span class="comment">// orWhere — condition OR</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'role_id'</span>, <span class="number">1</span>)
+    -&gt;<span class="function">orWhere</span>(<span class="string">'role_id'</span>, <span class="number">2</span>)
+
+<span class="comment">// whereIn — liste de valeurs</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">whereIn</span>(<span class="string">'role_id'</span>, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>])
+
+<span class="comment">// whereNull / whereNotNull</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">whereNull</span>(<span class="string">'deleted_at'</span>)
+    -&gt;<span class="function">whereNotNull</span>(<span class="string">'email'</span>)</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Tri, pagination et selection</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// orderBy(column, direction) — defaut ASC</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">orderBy</span>(<span class="string">'created_at'</span>, <span class="string">'DESC'</span>)
+
+<span class="comment">// limit et offset</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">orderBy</span>(<span class="string">'created_at'</span>, <span class="string">'DESC'</span>)
+    -&gt;<span class="function">limit</span>(<span class="number">10</span>)
+    -&gt;<span class="function">offset</span>(<span class="number">20</span>)
+
+<span class="comment">// select — choisir les colonnes</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">select</span>(<span class="string">'id'</span>, <span class="string">'email'</span>, <span class="string">'created_at'</span>)
+
+<span class="comment">// join / leftJoin</span>
+<span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">join</span>(<span class="string">'roles'</span>, <span class="string">'users.role_id'</span>, <span class="string">'='</span>, <span class="string">'roles.id'</span>)
+    -&gt;<span class="function">leftJoin</span>(<span class="string">'profiles'</span>, <span class="string">'users.id'</span>, <span class="string">'='</span>, <span class="string">'profiles.user_id'</span>)</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Methodes terminales</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Methode</th><th>Retour</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>-&gt;get()</code></td><td><code>Collection</code> (Model) / <code>array</code> (QB)</td><td>Toutes les lignes correspondantes</td></tr>
+          <tr><td><code>-&gt;first()</code></td><td><code>?Model</code> / <code>?array</code></td><td>Premiere ligne (LIMIT 1 auto)</td></tr>
+          <tr><td><code>-&gt;firstOrFail()</code></td><td><code>Model</code></td><td>Premiere ligne ou HttpException 404</td></tr>
+          <tr><td><code>-&gt;count()</code></td><td><code>int</code></td><td>COUNT(*)</td></tr>
+          <tr><td><code>-&gt;exists()</code></td><td><code>bool</code></td><td>Au moins une ligne existe ?</td></tr>
+          <tr><td><code>-&gt;insert(array)</code></td><td><code>string|false</code></td><td>INSERT et retourne le lastInsertId</td></tr>
+          <tr><td><code>-&gt;update(array)</code></td><td><code>int</code></td><td>Nombre de lignes affectees</td></tr>
+          <tr><td><code>-&gt;delete()</code></td><td><code>int</code></td><td>Nombre de lignes supprimees</td></tr>
+          <tr><td><code>-&gt;paginate(perPage, page)</code></td><td><code>array</code></td><td>Pagination avec <code>data</code> + <code>meta</code></td></tr>
+        </tbody>
+      </table>
+
+      <p>Exemple de pagination :</p>
+
+<pre><code><span class="comment">// Pagination native — retourne data + meta</span>
+<span class="variable">$result</span> = <span class="type">User</span>::<span class="function">paginate</span>(<span class="variable">perPage</span>: <span class="number">15</span>, <span class="variable">page</span>: <span class="number">2</span>);
+
+<span class="comment">// $result = [
+//     'data' =&gt; [ [...], [...], ... ],
+//     'meta' =&gt; [
+//         'total'        =&gt; 150,
+//         'per_page'     =&gt; 15,
+//         'current_page' =&gt; 2,
+//         'last_page'    =&gt; 10,
+//     ]
+// ]</span></code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     4. Relations
+     ═══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Relations <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>Le framework supporte trois types de relations. Chaque methode de relation est definie dans le model et execute une requete a l'appel.</p>
+
+  <details open>
+    <summary>Tableau des relations</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Methode</th><th>Signature</th><th>Retour</th><th>Exemple</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>belongsTo</code></td>
+            <td><code>belongsTo(Related::class, ?foreignKey, ?ownerKey)</code></td>
+            <td><code>?Model</code></td>
+            <td>Un Post <em>appartient a</em> un User</td>
+          </tr>
+          <tr>
+            <td><code>hasMany</code></td>
+            <td><code>hasMany(Related::class, ?foreignKey, ?localKey)</code></td>
+            <td><code>Collection</code></td>
+            <td>Un User <em>a plusieurs</em> Posts</td>
+          </tr>
+          <tr>
+            <td><code>hasOne</code></td>
+            <td><code>hasOne(Related::class, ?foreignKey, ?localKey)</code></td>
+            <td><code>?Model</code></td>
+            <td>Un User <em>a un</em> Profile</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        <strong>Convention des cles :</strong>
+        Si <code>foreignKey</code> n'est pas fourni, le framework le devine : <code>User</code> &rarr; <code>user_id</code>, <code>UserProfile</code> &rarr; <code>user_profile_id</code>.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Exemples complets</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// ─── belongsTo : Post -&gt; User ───────────────</span>
+<span class="keyword">class</span> <span class="type">Post</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">public function</span> <span class="function">author</span>(): ?<span class="type">Model</span>
+    {
+        <span class="keyword">return</span> <span class="variable">$this</span>-&gt;<span class="function">belongsTo</span>(<span class="type">User</span>::<span class="keyword">class</span>, <span class="string">'user_id'</span>);
+    }
+}
+
+<span class="comment">// ─── hasMany : User -&gt; Posts ─────────────────</span>
+<span class="keyword">class</span> <span class="type">User</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">public function</span> <span class="function">posts</span>(): <span class="type">Collection</span>
+    {
+        <span class="keyword">return</span> <span class="variable">$this</span>-&gt;<span class="function">hasMany</span>(<span class="type">Post</span>::<span class="keyword">class</span>, <span class="string">'user_id'</span>);
+    }
+}
+
+<span class="comment">// ─── hasOne : User -&gt; Profile ────────────────</span>
+<span class="keyword">class</span> <span class="type">User</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">public function</span> <span class="function">profile</span>(): ?<span class="type">Model</span>
+    {
+        <span class="keyword">return</span> <span class="variable">$this</span>-&gt;<span class="function">hasOne</span>(<span class="type">Profile</span>::<span class="keyword">class</span>, <span class="string">'user_id'</span>);
+    }
+}
+
+<span class="comment">// ─── Utilisation ─────────────────────────────</span>
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">findOrFail</span>(<span class="number">1</span>);
+
+<span class="variable">$role</span>    = <span class="variable">$user</span>-&gt;<span class="function">role</span>();       <span class="comment">// ?Role (belongsTo)</span>
+<span class="variable">$posts</span>   = <span class="variable">$user</span>-&gt;<span class="function">posts</span>();      <span class="comment">// Collection&lt;Post&gt; (hasMany)</span>
+<span class="variable">$profile</span> = <span class="variable">$user</span>-&gt;<span class="function">profile</span>();    <span class="comment">// ?Profile (hasOne)</span></code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     5. DB Facade
+     ═══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">5</span> Facade DB <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>La classe <code>DB</code> fournit un acces statique au <code>DatabaseManager</code> pour les requetes brutes et les transactions.</p>
+
+  <details open>
+    <summary>API de la facade DB</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\DB</span>;
+
+<span class="comment">// ─── QueryBuilder via DB::table() ────────────</span>
+<span class="variable">$rows</span> = <span class="type">DB</span>::<span class="function">table</span>(<span class="string">'users'</span>)
+    -&gt;<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">orderBy</span>(<span class="string">'created_at'</span>, <span class="string">'DESC'</span>)
+    -&gt;<span class="function">limit</span>(<span class="number">10</span>)
+    -&gt;<span class="function">get</span>();  <span class="comment">// Retourne array (pas des Models)</span>
+
+<span class="comment">// ─── Requete SQL brute ───────────────────────</span>
+<span class="variable">$stmt</span> = <span class="type">DB</span>::<span class="function">raw</span>(
+    <span class="string">'SELECT u.*, r.role_name
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     WHERE u.email = :email'</span>,
+    [<span class="string">'email'</span> =&gt; <span class="string">'alice@example.com'</span>]
+);
+<span class="variable">$user</span> = <span class="variable">$stmt</span>-&gt;<span class="function">fetch</span>();  <span class="comment">// PDO fetch associatif</span>
+
+<span class="comment">// ─── Transaction ─────────────────────────────</span>
+<span class="type">DB</span>::<span class="function">transaction</span>(<span class="keyword">function</span> () {
+    <span class="variable">$user</span> = <span class="type">User</span>::<span class="function">create</span>([<span class="string">'email'</span> =&gt; <span class="string">'new@example.com'</span>, <span class="string">'role_id'</span> =&gt; <span class="number">1</span>]);
+
+    <span class="type">DB</span>::<span class="function">table</span>(<span class="string">'audit_logs'</span>)-&gt;<span class="function">insert</span>([
+        <span class="string">'action'</span>  =&gt; <span class="string">'user_created'</span>,
+        <span class="string">'user_id'</span> =&gt; <span class="variable">$user</span>-&gt;<span class="variable">id</span>,
+    ]);
+});
+<span class="comment">// Commit auto si pas d'exception, rollback sinon</span>
+
+<span class="comment">// ─── Connexion specifique ────────────────────</span>
+<span class="variable">$jobs</span> = <span class="type">DB</span>::<span class="function">table</span>(<span class="string">'jobs'</span>, <span class="string">'job'</span>)-&gt;<span class="function">get</span>();
+<span class="variable">$stmt</span> = <span class="type">DB</span>::<span class="function">raw</span>(<span class="string">'SELECT * FROM jobs'</span>, [], <span class="string">'job'</span>);
+<span class="type">DB</span>::<span class="function">transaction</span>(<span class="variable">$callback</span>, <span class="string">'job'</span>);</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Methodes disponibles</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Methode</th><th>Signature</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>DB::table()</code></td><td><code>table(string $table, string $connection = 'default'): QueryBuilder</code></td><td>Cree un QueryBuilder pour la table</td></tr>
+          <tr><td><code>DB::raw()</code></td><td><code>raw(string $sql, array $params = [], string $connection = 'default'): PDOStatement</code></td><td>Execute du SQL brut avec parametres prepares</td></tr>
+          <tr><td><code>DB::transaction()</code></td><td><code>transaction(callable $cb, string $connection = 'default'): mixed</code></td><td>Execute dans une transaction (commit/rollback auto)</td></tr>
+          <tr><td><code>DB::connection()</code></td><td><code>connection(string $name = 'default'): Database</code></td><td>Acces direct a l'objet Database</td></tr>
+          <tr><td><code>DB::flush()</code></td><td><code>flush(): void</code></td><td>Rollback orphelins + purge (mode worker)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     6. Multi-database
+     ═══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">6</span> Multi-database <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>Le framework supporte plusieurs connexions PostgreSQL simultanees. Chaque connexion est nommee et configuree via le <code>.env</code>.</p>
+
+  <details open>
+    <summary>Configuration .env</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Connexion par defaut (nom : "default")</span>
+<span class="comment"># Prefixe .env : POSTGRES_*</span>
+<span class="variable">POSTGRES_HOST</span>=<span class="string">localhost</span>
+<span class="variable">POSTGRES_PORT</span>=<span class="string">5432</span>
+<span class="variable">POSTGRES_DB</span>=<span class="string">futurandco</span>
+<span class="variable">POSTGRES_USER</span>=<span class="string">myuser</span>
+<span class="variable">POSTGRES_PASSWORD</span>=<span class="string">secret</span>
+
+<span class="comment"># Connexion "job" (nom : "job")</span>
+<span class="comment"># Prefixe .env : POSTGRES_JOB_*</span>
+<span class="variable">POSTGRES_JOB_HOST</span>=<span class="string">10.0.0.50</span>
+<span class="variable">POSTGRES_JOB_PORT</span>=<span class="string">5432</span>
+<span class="variable">POSTGRES_JOB_DB</span>=<span class="string">presta15</span>
+<span class="variable">POSTGRES_JOB_USER</span>=<span class="string">user</span>
+<span class="variable">POSTGRES_JOB_PASSWORD</span>=<span class="string">pass</span>
+
+<span class="comment"># Connexion "test" (nom : "test")</span>
+<span class="comment"># Prefixe .env : POSTGRES_TEST_*</span>
+<span class="variable">POSTGRES_TEST_HOST</span>=<span class="string">localhost</span>
+<span class="variable">POSTGRES_TEST_PORT</span>=<span class="string">5432</span>
+<span class="variable">POSTGRES_TEST_DB</span>=<span class="string">test</span>
+<span class="variable">POSTGRES_TEST_USER</span>=<span class="string">myuser</span>
+<span class="variable">POSTGRES_TEST_PASSWORD</span>=<span class="string">secret</span></code></pre>
+
+      <div class="callout callout-info">
+        <strong>Convention :</strong>
+        Le nom de connexion <code>"job"</code> correspond au prefixe <code>POSTGRES_JOB_*</code> dans le <code>.env</code>. Le mapping est automatique : <code>POSTGRES_</code> + <code>strtoupper(name)</code> + <code>_HOST</code>, etc.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Utilisation dans le code</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// ─── Via DB facade ───────────────────────────</span>
+<span class="variable">$jobs</span> = <span class="type">DB</span>::<span class="function">table</span>(<span class="string">'jobs'</span>, <span class="string">'job'</span>)-&gt;<span class="function">get</span>();
+
+<span class="comment">// ─── Via l'attribut #[Table] sur un Model ────</span>
+#[<span class="type">Table</span>(<span class="string">'jobs'</span>, <span class="variable">connection</span>: <span class="string">'job'</span>)]
+<span class="keyword">class</span> <span class="type">Job</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="comment">// Toutes les requetes de ce model iront</span>
+    <span class="comment">// sur la connexion "job" automatiquement</span>
+}
+
+<span class="comment">// ─── Ou via la propriete statique ────────────</span>
+<span class="keyword">class</span> <span class="type">Job</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">protected static</span> <span class="type">string</span> <span class="variable">$connection</span> = <span class="string">'job'</span>;
+    <span class="keyword">protected static</span> <span class="type">string</span> <span class="variable">$table</span> = <span class="string">'jobs'</span>;
+}
+
+<span class="comment">// Les deux fonctionnent de la meme facon :</span>
+<span class="variable">$job</span> = <span class="type">Job</span>::<span class="function">find</span>(<span class="number">1</span>);       <span class="comment">// Requete sur la DB "job"</span>
+<span class="variable">$all</span> = <span class="type">Job</span>::<span class="function">all</span>();          <span class="comment">// Requete sur la DB "job"</span></code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     7. DTOs & Validation
+     ═══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">7</span> DTOs &amp; Validation <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>Les DTOs (Data Transfer Objects) sont des classes <code>readonly</code> dont les parametres du constructeur portent des attributs de validation. Le <code>Validator</code> inspecte ces attributs via la Reflection API.</p>
+
+  <details open>
+    <summary>Definir un DTO avec validation</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Dto\User</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Attributes\Required</span>;
+<span class="keyword">use</span> <span class="type">Framework\Attributes\Email</span>;
+<span class="keyword">use</span> <span class="type">Framework\Attributes\MinLength</span>;
+<span class="keyword">use</span> <span class="type">Framework\Attributes\MaxLength</span>;
+<span class="keyword">use</span> <span class="type">Framework\Attributes\Min</span>;
+<span class="keyword">use</span> <span class="type">Framework\Attributes\Max</span>;
+<span class="keyword">use</span> <span class="type">Framework\Attributes\Regex</span>;
+
+<span class="keyword">readonly class</span> <span class="type">UserStoreRequest</span>
+{
+    <span class="keyword">public function</span> <span class="function">__construct</span>(
+        #[<span class="type">Required</span>]
+        #[<span class="type">Email</span>]
+        #[<span class="type">MaxLength</span>(<span class="number">255</span>)]
+        <span class="keyword">public</span> <span class="type">string</span> <span class="variable">$email</span> = <span class="string">''</span>,
+
+        #[<span class="type">Required</span>]
+        #[<span class="type">Min</span>(<span class="number">1</span>)]
+        <span class="keyword">public</span> <span class="type">int</span> <span class="variable">$role_id</span> = <span class="number">0</span>,
+
+        <span class="keyword">public</span> <span class="type">bool</span> <span class="variable">$is_active</span> = <span class="keyword">true</span>,
+
+        <span class="keyword">public</span> ?<span class="type">bool</span> <span class="variable">$is_consent</span> = <span class="keyword">null</span>,
+    ) {}
+}</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Attributs de validation disponibles</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Attribut</th><th>Parametres</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>#[Required]</code></td><td><code>?string $message</code></td><td>Champ obligatoire</td></tr>
+          <tr><td><code>#[Email]</code></td><td><code>?string $message</code></td><td>Adresse email valide (<code>filter_var</code>)</td></tr>
+          <tr><td><code>#[MinLength(n)]</code></td><td><code>int $min, ?string $message</code></td><td>Longueur minimale (string)</td></tr>
+          <tr><td><code>#[MaxLength(n)]</code></td><td><code>int $max, ?string $message</code></td><td>Longueur maximale (string)</td></tr>
+          <tr><td><code>#[Min(n)]</code></td><td><code>int|float $min, ?string $message</code></td><td>Valeur minimale (numerique)</td></tr>
+          <tr><td><code>#[Max(n)]</code></td><td><code>int|float $max, ?string $message</code></td><td>Valeur maximale (numerique)</td></tr>
+          <tr><td><code>#[Regex(pattern)]</code></td><td><code>string $pattern, string $message</code></td><td>Validation par expression reguliere</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary>Utiliser Validator::validate()</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\Validator</span>;
+<span class="keyword">use</span> <span class="type">App\Dto\UserStoreRequest</span>;
+
+<span class="comment">// Donnees brutes (ex: JSON decode du body)</span>
+<span class="variable">$data</span> = <span class="function">json_decode</span>(<span class="function">file_get_contents</span>(<span class="string">'php://input'</span>), <span class="keyword">true</span>);
+
+<span class="comment">// Validation — retourne un tableau d'erreurs (vide si valide)</span>
+<span class="variable">$errors</span> = <span class="type">Validator</span>::<span class="function">validate</span>(<span class="type">UserStoreRequest</span>::<span class="keyword">class</span>, <span class="variable">$data</span>);
+
+<span class="keyword">if</span> (!<span class="keyword">empty</span>(<span class="variable">$errors</span>)) {
+    <span class="comment">// Retourner les erreurs 422</span>
+    <span class="keyword">throw new</span> <span class="type">HttpException</span>(<span class="number">422</span>, <span class="function">json_encode</span>(<span class="variable">$errors</span>));
+}
+
+<span class="comment">// Hydrater le DTO</span>
+<span class="variable">$dto</span> = <span class="keyword">new</span> <span class="type">UserStoreRequest</span>(...<span class="variable">$data</span>);
+
+<span class="comment">// Utiliser les donnees validees</span>
+<span class="variable">$user</span> = <span class="type">User</span>::<span class="function">create</span>([
+    <span class="string">'email'</span>     =&gt; <span class="variable">$dto</span>-&gt;<span class="variable">email</span>,
+    <span class="string">'role_id'</span>   =&gt; <span class="variable">$dto</span>-&gt;<span class="variable">role_id</span>,
+    <span class="string">'is_active'</span> =&gt; <span class="variable">$dto</span>-&gt;<span class="variable">is_active</span>,
+]);</code></pre>
+
+      <div class="callout callout-info">
+        <strong>Verification de type :</strong>
+        Le Validator verifie aussi le type de base (<code>string</code>, <code>int</code>, <code>float</code>, <code>bool</code>, <code>array</code>) avant d'appliquer les attributs de validation. Un <code>int</code> envoye comme string sera rejete.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     Exercises
+     ═══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">&#9998;</span> Exercices</h2>
+
+  <details>
+    <summary>Exercise 1 &mdash; Model Product avec soft delete <span class="badge badge-beginner">Beginner</span></summary>
+    <div class="details-body">
+      <p><strong>Objectif :</strong> Creer un model <code>Product</code> avec soft delete et une relation <code>belongsTo</code> vers <code>Category</code>.</p>
+
+      <p><strong>Consignes :</strong></p>
+      <ul>
+        <li>Table : <code>products</code></li>
+        <li>Soft delete active</li>
+        <li>Casts : <code>price</code> en <code>float</code>, <code>is_published</code> en <code>bool</code>, <code>metadata</code> en <code>json</code></li>
+        <li>Relation : un produit appartient a une categorie via <code>category_id</code></li>
+      </ul>
+
+      <details>
+        <summary>Solution</summary>
+        <div class="details-body">
+<pre><code><span class="keyword">namespace</span> <span class="type">App\Models</span>;
+
+<span class="keyword">use</span> <span class="type">Framework\Attributes\Table</span>;
+<span class="keyword">use</span> <span class="type">Framework\Core\Model</span>;
+
+#[<span class="type">Table</span>(<span class="string">'products'</span>)]
+<span class="keyword">class</span> <span class="type">Product</span> <span class="keyword">extends</span> <span class="type">Model</span>
+{
+    <span class="keyword">protected static</span> <span class="type">bool</span> <span class="variable">$softDeletes</span> = <span class="keyword">true</span>;
+
+    <span class="keyword">protected static</span> <span class="type">array</span> <span class="variable">$casts</span> = [
+        <span class="string">'price'</span>        =&gt; <span class="string">'float'</span>,
+        <span class="string">'is_published'</span> =&gt; <span class="string">'bool'</span>,
+        <span class="string">'metadata'</span>     =&gt; <span class="string">'json'</span>,
+    ];
+
+    <span class="keyword">public function</span> <span class="function">category</span>(): ?<span class="type">Model</span>
+    {
+        <span class="keyword">return</span> <span class="variable">$this</span>-&gt;<span class="function">belongsTo</span>(<span class="type">Category</span>::<span class="keyword">class</span>, <span class="string">'category_id'</span>);
+    }
+}</code></pre>
+        </div>
+      </details>
+    </div>
+  </details>
+
+  <details>
+    <summary>Exercise 2 &mdash; Requete complexe avec le Query Builder <span class="badge badge-intermediate">Intermediate</span></summary>
+    <div class="details-body">
+      <p><strong>Objectif :</strong> Ecrire une requete qui recupere tous les utilisateurs actifs avec le role <code>'admin'</code>, tries par date de creation decroissante, limites a 10.</p>
+
+      <p><strong>Consignes :</strong></p>
+      <ul>
+        <li>Utiliser le QueryBuilder avec <code>join</code></li>
+        <li>Filtrer sur <code>is_active = true</code> et <code>role_name = 'admin'</code></li>
+        <li>Trier par <code>created_at DESC</code></li>
+        <li>Limiter a 10 resultats</li>
+      </ul>
+
+      <details>
+        <summary>Solution</summary>
+        <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Framework\Core\DB</span>;
+
+<span class="comment">// Solution 1 : Via DB facade (retourne des arrays)</span>
+<span class="variable">$admins</span> = <span class="type">DB</span>::<span class="function">table</span>(<span class="string">'users'</span>)
+    -&gt;<span class="function">select</span>(<span class="string">'users.*'</span>, <span class="string">'roles.role_name'</span>)
+    -&gt;<span class="function">join</span>(<span class="string">'roles'</span>, <span class="string">'users.role_id'</span>, <span class="string">'='</span>, <span class="string">'roles.id'</span>)
+    -&gt;<span class="function">where</span>(<span class="string">'users.is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">where</span>(<span class="string">'roles.role_name'</span>, <span class="string">'admin'</span>)
+    -&gt;<span class="function">orderBy</span>(<span class="string">'users.created_at'</span>, <span class="string">'DESC'</span>)
+    -&gt;<span class="function">limit</span>(<span class="number">10</span>)
+    -&gt;<span class="function">get</span>();
+
+<span class="comment">// Solution 2 : Via le Model (returns a Collection de User)</span>
+<span class="variable">$admins</span> = <span class="type">User</span>::<span class="function">where</span>(<span class="string">'is_active'</span>, <span class="keyword">true</span>)
+    -&gt;<span class="function">join</span>(<span class="string">'roles'</span>, <span class="string">'users.role_id'</span>, <span class="string">'='</span>, <span class="string">'roles.id'</span>)
+    -&gt;<span class="function">where</span>(<span class="string">'roles.role_name'</span>, <span class="string">'admin'</span>)
+    -&gt;<span class="function">orderBy</span>(<span class="string">'users.created_at'</span>, <span class="string">'DESC'</span>)
+    -&gt;<span class="function">limit</span>(<span class="number">10</span>)
+    -&gt;<span class="function">get</span>();
+
+<span class="comment">// Solution 3 : Via DB::raw pour une requete SQL directe</span>
+<span class="variable">$stmt</span> = <span class="type">DB</span>::<span class="function">raw</span>(
+    <span class="string">'SELECT u.*, r.role_name
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     WHERE u.is_active = :active
+       AND r.role_name = :role
+     ORDER BY u.created_at DESC
+     LIMIT 10'</span>,
+    [<span class="string">'active'</span> =&gt; <span class="keyword">true</span>, <span class="string">'role'</span> =&gt; <span class="string">'admin'</span>]
+);
+<span class="variable">$admins</span> = <span class="variable">$stmt</span>-&gt;<span class="function">fetchAll</span>();</code></pre>
+        </div>
+      </details>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     Pagination
+     ═══════════════════════════════════════════════════════════ -->
+<div class="pagination">
+  <a href="05-routing.html" class="prev">Routing</a>
+  <a href="07-auth-di-events.html" class="next">Auth, DI &amp; Events</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

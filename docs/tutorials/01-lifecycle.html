@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 — Lifecycle & Golden Rules</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Lifecycle &amp; Golden Rules</h1>
+  <p>Understanding the FrankenPHP worker lifecycle</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 01 &mdash; Lifecycle</div>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> PHP-FPM vs Worker <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>In classic mode, PHP starts a new process for each request. In worker mode, the application lives indefinitely in memory.</p>
+
+  <div class="diagram">
+<span style="color:#d0a090">PHP-FPM (classic)</span>                    <span style="color:#a8bfd0">FrankenPHP Worker</span>
+
+Request 1:                              Boot (once only):
+  Boot app ──► Handle ──► Destroy         Boot app ──► Load routes
+                                                      │
+Request 2:                              Loop:         ▼
+  Boot app ──► Handle ──► Destroy         ┌──► beforeRequest()
+                                          │    frankenphp_handle_request()
+Request 3:                                │      └── handler() ──► dispatch HTTP
+  Boot app ──► Handle ──► Destroy         │    afterRequest()
+                                          │    cleanup (DB, auth, GC)
+  Each request = fresh world              └──── loop ────────────────────┘
+
+                                          Same app, same memory, same objects
+  </div>
+</section>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> What persists, what is reset <span class="badge badge-beginner">Beginner</span></h2>
+
+  <details open>
+    <summary>Complete table</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Element</th><th>Persists?</th><th>Comment</th></tr></thead>
+        <tbody>
+          <tr><td>Worker scope variables</td><td><span class="badge badge-safe">YES</span></td><td><code>$app</code>, <code>$stats</code> created before the loop</td></tr>
+          <tr><td>Static properties</td><td><span class="badge badge-safe">YES</span></td><td><code>static $instance</code> survives between requests</td></tr>
+          <tr><td>Container singletons</td><td><span class="badge badge-safe">YES</span></td><td>DatabaseManager, JwtService, EventDispatcher</td></tr>
+          <tr><td>PDO connections</td><td><span class="badge badge-warning">DEPENDS</span></td><td>Cleaned up in our cleanup</td></tr>
+          <tr><td><code>$_SERVER</code>, <code>$_GET</code>, <code>$_POST</code></td><td><span class="badge badge-critical">NO</span></td><td>Reset by FrankenPHP on each request</td></tr>
+          <tr><td><code>$_REQUEST</code> (our additions)</td><td><span class="badge badge-warning">PARTIAL</span></td><td>Our additions persist, cleaned manually</td></tr>
+          <tr><td><code>php://input</code></td><td><span class="badge badge-critical">NO</span></td><td>Reset by FrankenPHP</td></tr>
+          <tr><td>HTTP Headers</td><td><span class="badge badge-critical">NO</span></td><td>Reset by FrankenPHP between handlers</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> Our worker, line by line <span class="badge badge-beginner">Beginner</span></h2>
+
+  <details>
+    <summary>index.php — Automatic mode detection</summary>
+    <div class="details-body">
+<pre><code><span class="variable">$app</span> = <span class="keyword">new</span> <span class="type">App</span>();                         <span class="comment">// 1. Created ONCE</span>
+<span class="variable">$app</span>-><span class="function">router</span>()-><span class="function">addGlobalMiddleware</span>(...);   <span class="comment">// 2. Middleware loaded ONCE</span>
+<span class="variable">$app</span>-><span class="function">loadRoutes</span>(...);                     <span class="comment">// 3. Routes loaded ONCE</span>
+
+<span class="keyword">if</span> (<span class="function">function_exists</span>(<span class="string">'frankenphp_handle_request'</span>)) {
+    <span class="variable">$app</span>-><span class="function">runWorker</span>();  <span class="comment">// 4. Infinite loop</span>
+} <span class="keyword">else</span> {
+    <span class="variable">$app</span>-><span class="function">run</span>();        <span class="comment">// Classic mode</span>
+}</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>App::runWorker() — The loop with guaranteed cleanup</summary>
+    <div class="details-body">
+<pre><code><span class="variable">$stats</span> = <span class="keyword">new</span> <span class="type">WorkerStats</span>();                <span class="comment">// Created once, lives forever</span>
+
+<span class="keyword">for</span> (<span class="variable">$i</span> = <span class="number">0</span>; ...; ++<span class="variable">$i</span>) {
+    <span class="variable">$stats</span>-><span class="function">beforeRequest</span>();                <span class="comment">// Memory snapshot</span>
+
+    \<span class="function">frankenphp_handle_request</span>(<span class="variable">$handler</span>); <span class="comment">// Wait for a request</span>
+
+    <span class="variable">$stats</span>-><span class="function">afterRequest</span>();                 <span class="comment">// Metrics</span>
+
+    <span class="keyword">try</span> {
+        <span class="variable">$dbManager</span>-><span class="function">flush</span>();                <span class="comment">// Rollback + close connections</span>
+        <span class="type">Database</span>::<span class="function">clearInstances</span>();         <span class="comment">// Clear singleton cache</span>
+    } <span class="keyword">finally</span> {
+        <span class="keyword">unset</span>(<span class="variable">$_REQUEST</span>[<span class="string">'__auth_user'</span>]);   <span class="comment">// ALWAYS executed</span>
+        \<span class="function">gc_collect_cycles</span>();               <span class="comment">// Force GC</span>
+    }
+}</code></pre>
+      <div class="callout callout-info">
+        <strong>Why try/finally?</strong>
+        If <code>flush()</code> throws an exception, the <code>finally</code> block guarantees that auth is cleaned up and GC runs. Without it, a user could leak into the next request.
+      </div>
+    </div>
+  </details>
+</section>
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> The 5 Golden Rules <span class="badge badge-beginner">Beginner</span></h2>
+
+  <details open>
+    <summary>1. Never use <code>exit()</code> or <code>die()</code> <span class="badge badge-critical">CRITICAL</span></summary>
+    <div class="details-body">
+      <p><code>exit()</code> kills the entire worker. All subsequent requests will fail.</p>
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">Forbidden</div>
+<pre><code><span class="keyword">if</span> (!<span class="variable">$user</span>) {
+    <span class="function">http_response_code</span>(<span class="number">401</span>);
+    <span class="keyword">echo</span> <span class="string">'Unauthorized'</span>;
+    <span class="keyword">exit</span>;  <span class="comment">// CRASHES the worker!</span>
+}</code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">Correct</div>
+<pre><code><span class="keyword">if</span> (!<span class="variable">$user</span>) {
+    <span class="keyword">throw new</span> <span class="type">HttpException</span>(
+        <span class="number">401</span>, <span class="string">'Unauthorized'</span>
+    );
+}</code></pre>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>2. No request-scoped static state <span class="badge badge-critical">CRITICAL</span></summary>
+    <div class="details-body">
+      <p>Request data stored in a static property will leak into the next request.</p>
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">Dangerous</div>
+<pre><code><span class="keyword">class</span> <span class="type">CurrentUser</span>
+{
+    <span class="keyword">private static</span> ?<span class="type">array</span> <span class="variable">$user</span> = <span class="keyword">null</span>;
+
+    <span class="keyword">public static function</span> <span class="function">set</span>(<span class="variable">$u</span>)
+    {
+        <span class="keyword">self</span>::<span class="variable">$user</span> = <span class="variable">$u</span>;
+        <span class="comment">// Leaks into the next request!</span>
+    }
+}</code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">Correct</div>
+<pre><code><span class="comment">// Via $_REQUEST (cleaned by the worker)</span>
+<span class="variable">$_REQUEST</span>[<span class="string">'__auth_user'</span>] = <span class="variable">$user</span>;
+
+<span class="comment">// Or via the Request object (immutable)</span>
+<span class="variable">$request</span>-><span class="function">withAttribute</span>(
+    <span class="string">'auth_user'</span>, <span class="variable">$user</span>
+);</code></pre>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>3. Clean up DB connections <span class="badge badge-warning">IMPORTANT</span></summary>
+    <div class="details-body">
+      <p>An uncommitted transaction locks tables for subsequent requests. Our cleanup performs <code>flush()</code> automatically.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>4. Event listeners = boot only <span class="badge badge-warning">IMPORTANT</span></summary>
+    <div class="details-body">
+      <p>Never call <code>Event::listen()</code> inside a controller. Listeners accumulate with each request.</p>
+      <div class="callout callout-danger">
+        <strong>Request 1: 1 listener. Request 100: 100 identical listeners.</strong>
+        Listeners should be in <code>app/Listeners/</code>, discovered at boot.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>5. Headers before the body <span class="badge badge-beginner">IMPORTANT</span></summary>
+    <div class="details-body">
+      <p>FrankenPHP sends the response at the end of the handler. Set headers before any <code>echo</code>. Our Router already handles this correctly.</p>
+    </div>
+  </details>
+</section>
+
+<div class="pagination">
+  <span></span>
+  <a href="02-patterns.html" class="next">Patterns &amp; Architecture</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>
