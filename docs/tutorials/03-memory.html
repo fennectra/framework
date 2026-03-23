@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 — Memory & Monitoring</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Memory &amp; Monitoring</h1>
+  <p>Detecting memory leaks, analyzing trends and monitoring your workers in production</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 03 &mdash; Memory</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 1 : Memory trend analysis                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> Memory Trend Analysis <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p><code>WorkerStats</code> records memory consumption on each request and calculates a trend automatically. This allows detecting leaks <em>before</em> they crash the worker.</p>
+
+  <details open>
+    <summary>How it works</summary>
+    <div class="details-body">
+      <p>On each request, <code>beforeRequest()</code> captures <code>memory_get_usage()</code>. After enough samples, the system compares the start and end of the window to determine the trend.</p>
+
+<pre><code><span class="comment">// In WorkerStats::beforeRequest()</span>
+<span class="variable">$this</span>-><span class="variable">memorySnapshots</span>[] = <span class="function">memory_get_usage</span>(<span class="keyword">true</span>);
+
+<span class="comment">// Keep only the last N samples</span>
+<span class="keyword">if</span> (<span class="function">count</span>(<span class="variable">$this</span>-><span class="variable">memorySnapshots</span>) > <span class="variable">$this</span>-><span class="variable">windowSize</span>) {
+    <span class="function">array_shift</span>(<span class="variable">$this</span>-><span class="variable">memorySnapshots</span>);
+}</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Trend values</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Trend</th><th>Meaning</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><code>stable</code></td><td>Memory stays constant between requests</td><td>None &mdash; all is well</td></tr>
+          <tr><td><code>growing</code></td><td>Memory increases steadily (probable leak)</td><td>Identify the source, see section 2</td></tr>
+          <tr><td><code>spiky</code></td><td>Occasional spikes but returns to normal</td><td>Check heavy requests (uploads, reports)</td></tr>
+          <tr><td><code>insufficient_data</code></td><td>Not enough requests to conclude (&lt; 10 samples)</td><td>Wait for more traffic</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary>curl examples</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># Get worker stats</span>
+<span class="function">curl</span> <span class="string">http://localhost:8080/debug/worker</span> | <span class="function">jq</span> <span class="string">'.memory'</span>
+
+<span class="comment"># Monitor the trend continuously (every 5s)</span>
+<span class="function">watch</span> -n <span class="number">5</span> <span class="string">'curl -s http://localhost:8080/debug/worker | jq .memory.trend'</span>
+
+<span class="comment"># Alert if the trend is "growing"</span>
+<span class="variable">TREND</span>=$(<span class="function">curl</span> -s <span class="string">http://localhost:8080/debug/worker</span> | <span class="function">jq</span> -r <span class="string">'.memory.trend'</span>)
+<span class="keyword">if</span> [ <span class="string">"$TREND"</span> = <span class="string">"growing"</span> ]; <span class="keyword">then</span>
+    <span class="function">echo</span> <span class="string">"ALERT: memory leak detected!"</span>
+<span class="keyword">fi</span></code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 2 : Common leak sources                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Common Memory Leak Sources <span class="badge badge-advanced">Advanced</span></h2>
+
+  <p>In worker mode, the PHP process never dies. A forgotten allocation on each request will eventually saturate memory.</p>
+
+  <details open>
+    <summary>Unbounded static arrays</summary>
+    <div class="details-body">
+      <p>A static array that grows on each request is the #1 cause of leaks.</p>
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">Guaranteed leak</div>
+<pre><code><span class="keyword">class</span> <span class="type">Cache</span>
+{
+    <span class="keyword">private static array</span> <span class="variable">$store</span> = [];
+
+    <span class="keyword">public static function</span> <span class="function">set</span>(<span class="variable">$k</span>, <span class="variable">$v</span>)
+    {
+        <span class="keyword">self</span>::<span class="variable">$store</span>[<span class="variable">$k</span>] = <span class="variable">$v</span>;
+        <span class="comment">// Never shrinks!</span>
+        <span class="comment">// Request 1: 10 entries</span>
+        <span class="comment">// Request 10000: 100000 entries</span>
+    }
+}</code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">With LRU limit</div>
+<pre><code><span class="keyword">class</span> <span class="type">Cache</span>
+{
+    <span class="keyword">private static array</span> <span class="variable">$store</span> = [];
+    <span class="keyword">private const</span> <span class="variable">MAX</span> = <span class="number">1000</span>;
+
+    <span class="keyword">public static function</span> <span class="function">set</span>(<span class="variable">$k</span>, <span class="variable">$v</span>)
+    {
+        <span class="keyword">self</span>::<span class="variable">$store</span>[<span class="variable">$k</span>] = <span class="variable">$v</span>;
+        <span class="keyword">if</span> (<span class="function">count</span>(<span class="keyword">self</span>::<span class="variable">$store</span>) > <span class="keyword">self</span>::<span class="variable">MAX</span>) {
+            <span class="function">array_shift</span>(<span class="keyword">self</span>::<span class="variable">$store</span>);
+        }
+    }
+}</code></pre>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Closures capturing large data</summary>
+    <div class="details-body">
+      <p>A closure that captures a large variable by reference will prevent the garbage collector from freeing it.</p>
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">Implicit capture</div>
+<pre><code><span class="variable">$bigData</span> = <span class="function">file_get_contents</span>(<span class="string">'huge.csv'</span>); <span class="comment">// 50 MB</span>
+
+<span class="variable">$processor</span> = <span class="keyword">function</span>() <span class="keyword">use</span> (<span class="variable">$bigData</span>) {
+    <span class="comment">// $bigData stays in memory</span>
+    <span class="comment">// even after the request!</span>
+    <span class="keyword">return</span> <span class="function">str_word_count</span>(<span class="variable">$bigData</span>);
+};
+
+<span class="comment">// If $processor is stored in a static...</span>
+<span class="type">Registry</span>::<span class="function">add</span>(<span class="variable">$processor</span>); <span class="comment">// 50 MB leak</span></code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">Process and release</div>
+<pre><code><span class="variable">$bigData</span> = <span class="function">file_get_contents</span>(<span class="string">'huge.csv'</span>);
+<span class="variable">$result</span> = <span class="function">str_word_count</span>(<span class="variable">$bigData</span>);
+<span class="keyword">unset</span>(<span class="variable">$bigData</span>); <span class="comment">// Release immediately</span>
+
+<span class="comment">// The closure only captures the result (int)</span>
+<span class="variable">$processor</span> = <span class="keyword">fn</span>() => <span class="variable">$result</span>;</code></pre>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Event listeners registered per request</summary>
+    <div class="details-body">
+      <p>Registering a listener in a controller means it accumulates on each request.</p>
+      <div class="compare">
+        <div class="compare-bad">
+          <div class="compare-label">In a controller (dangerous)</div>
+<pre><code><span class="keyword">class</span> <span class="type">UserController</span>
+{
+    <span class="keyword">public function</span> <span class="function">create</span>(<span class="variable">$req</span>)
+    {
+        <span class="comment">// Adds 1 listener on EACH request!</span>
+        <span class="type">Event</span>::<span class="function">listen</span>(<span class="string">'user.created'</span>,
+            <span class="keyword">fn</span>(<span class="variable">$e</span>) => <span class="function">sendEmail</span>(<span class="variable">$e</span>)
+        );
+        <span class="comment">// Request 500 = 500 emails sent</span>
+    }
+}</code></pre>
+        </div>
+        <div class="compare-good">
+          <div class="compare-label">At boot (correct)</div>
+<pre><code><span class="comment">// app/Listeners/SendWelcomeEmail.php</span>
+<span class="comment">// Discovered automatically at boot</span>
+<span class="keyword">class</span> <span class="type">SendWelcomeEmail</span>
+{
+    <span class="keyword">public function</span> <span class="function">handle</span>(<span class="type">UserCreated</span> <span class="variable">$e</span>)
+    {
+        <span class="function">sendEmail</span>(<span class="variable">$e</span>-><span class="variable">user</span>);
+    }
+}
+
+<span class="comment">// 1 single listener, regardless of the number</span>
+<span class="comment">// of requests processed</span></code></pre>
+        </div>
+      </div>
+      <div class="callout callout-danger">
+        <strong>Simple rule:</strong> if your code calls <code>Event::listen()</code> in a file under <code>app/Controllers/</code>, it's a leak. Move it to <code>app/Listeners/</code>.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 3 : MAX_REQUESTS                                           -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> MAX_REQUESTS Configuration <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p><code>MAX_REQUESTS</code> limits the number of requests a worker handles before restarting. It's a safety net against memory leaks.</p>
+
+  <details open>
+    <summary>Environment variable</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># .env or docker-compose.yml</span>
+<span class="variable">MAX_REQUESTS</span>=<span class="number">500</span>    <span class="comment"># Restart the worker after 500 requests</span>
+
+<span class="comment"># In production with a stable app:</span>
+<span class="variable">MAX_REQUESTS</span>=<span class="number">5000</span>   <span class="comment"># Fewer restarts = better perf</span>
+
+<span class="comment"># To disable (not recommended):</span>
+<span class="variable">MAX_REQUESTS</span>=<span class="number">0</span>      <span class="comment"># The worker will never restart</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Recommended strategy</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Phase</th><th>Value</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr><td>Development</td><td><code>50</code></td><td>Detect leaks quickly</td></tr>
+          <tr><td>Staging / QA</td><td><code>500</code></td><td>Good safety/performance compromise</td></tr>
+          <tr><td>Production (start)</td><td><code>500</code></td><td>Safe starting value</td></tr>
+          <tr><td>Production (stable)</td><td><code>5000</code></td><td>Increase gradually if trend is <code>stable</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        <strong>Strategy:</strong> Start at <code>500</code>. Monitor the memory trend via <code>/debug/worker</code>. If it stays <code>stable</code> for several days, gradually increase to <code>5000</code>. If it goes to <code>growing</code>, reduce and investigate.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Reading it in the code</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// App::runWorker()</span>
+<span class="variable">$maxRequests</span> = (<span class="keyword">int</span>) (<span class="variable">$_ENV</span>[<span class="string">'MAX_REQUESTS'</span>] ?? <span class="number">500</span>);
+
+<span class="keyword">for</span> (<span class="variable">$i</span> = <span class="number">0</span>; <span class="variable">$i</span> < <span class="variable">$maxRequests</span> || <span class="variable">$maxRequests</span> === <span class="number">0</span>; ++<span class="variable">$i</span>) {
+    <span class="comment">// Handle requests...</span>
+}
+
+<span class="comment">// When the loop ends, FrankenPHP restarts the worker</span>
+<span class="type">Logger</span>::<span class="function">info</span>(<span class="string">"Worker restart after <span class="variable">{$i}</span> requests"</span>);</code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 4 : Logger                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">4</span> Logger <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The framework includes a Logger with severity levels, automatic file rotation and Docker support.</p>
+
+  <details open>
+    <summary>Log levels</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">App\Logger</span>;
+
+<span class="type">Logger</span>::<span class="function">debug</span>(<span class="string">'Variable inspected'</span>, [<span class="string">'data'</span> => <span class="variable">$value</span>]);   <span class="comment">// Dev only</span>
+<span class="type">Logger</span>::<span class="function">info</span>(<span class="string">'User logged in'</span>, [<span class="string">'id'</span> => <span class="variable">$userId</span>]);         <span class="comment">// Normal event</span>
+<span class="type">Logger</span>::<span class="function">warning</span>(<span class="string">'High memory'</span>, [<span class="string">'mb'</span> => <span class="variable">$memMb</span>]);       <span class="comment">// Attention required</span>
+<span class="type">Logger</span>::<span class="function">error</span>(<span class="string">'DB connection failed'</span>, [<span class="string">'err'</span> => <span class="variable">$e</span>]);     <span class="comment">// Critical error</span></code></pre>
+
+      <table>
+        <thead><tr><th>Method</th><th>Level</th><th>When to use</th></tr></thead>
+        <tbody>
+          <tr><td><code>Logger::debug()</code></td><td>DEBUG</td><td>Detailed inspection during dev</td></tr>
+          <tr><td><code>Logger::info()</code></td><td>INFO</td><td>Normal events (login, CRUD)</td></tr>
+          <tr><td><code>Logger::warning()</code></td><td>WARNING</td><td>Unexpected non-blocking behavior</td></tr>
+          <tr><td><code>Logger::error()</code></td><td>ERROR</td><td>Errors requiring intervention</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary>Log files and rotation</summary>
+    <div class="details-body">
+<pre><code><span class="comment">// Log file locations</span>
+var/logs/app.log          <span class="comment">// Main log</span>
+var/logs/app-2026-03-21.log  <span class="comment">// After rotation</span>
+var/logs/error.log        <span class="comment">// Separate errors</span></code></pre>
+
+      <div class="callout callout-info">
+        <strong>RotatingFileHandler:</strong> Log files are automatically rotated daily. Files older than <strong>14 days</strong> are deleted. No configuration needed.
+      </div>
+
+<pre><code><span class="comment">// Configuration in the Container</span>
+<span class="variable">$handler</span> = <span class="keyword">new</span> <span class="type">RotatingFileHandler</span>(
+    <span class="string">'var/logs/app.log'</span>,
+    <span class="number">14</span>,                  <span class="comment">// Keep 14 days</span>
+    <span class="type">Logger</span>::<span class="variable">DEBUG</span>        <span class="comment">// Minimum level</span>
+);</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Docker logs (stderr)</summary>
+    <div class="details-body">
+      <p>In a Docker environment, logs are also written to <code>stderr</code> to be captured by <code>docker logs</code>.</p>
+
+<pre><code><span class="comment"># View container logs</span>
+<span class="function">docker</span> logs -f my-frankenphp-app
+
+<span class="comment"># Filter errors</span>
+<span class="function">docker</span> logs my-frankenphp-app <span class="number">2</span>>&<span class="number">1</span> | <span class="function">grep</span> <span class="string">"ERROR"</span>
+
+<span class="comment"># Logs from the last 10 minutes</span>
+<span class="function">docker</span> logs --since <span class="number">10</span>m my-frankenphp-app</code></pre>
+
+      <div class="callout callout-success">
+        <strong>Docker best practice:</strong> Don't mount a volume for <code>var/logs/</code> in production. Use <code>docker logs</code> and a centralized collector (ELK, Loki, Datadog).
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 5 : /debug/worker endpoint                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">5</span> Endpoint <code>/debug/worker</code> <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>This HTTP endpoint returns the complete worker state in JSON format. Ideal for monitoring and debugging.</p>
+
+  <details open>
+    <summary>Complete JSON response</summary>
+    <div class="details-body">
+<pre><code>{
+    <span class="string">"worker"</span>: {
+        <span class="string">"pid"</span>: <span class="number">42</span>,                        <span class="comment">// Worker process PID</span>
+        <span class="string">"uptime"</span>: <span class="string">"2h 15m 30s"</span>,           <span class="comment">// Duration since last restart</span>
+        <span class="string">"started_at"</span>: <span class="string">"2026-03-21T08:00:00Z"</span> <span class="comment">// Start timestamp</span>
+    },
+    <span class="string">"requests"</span>: {
+        <span class="string">"total"</span>: <span class="number">1847</span>,                    <span class="comment">// Total number of requests handled</span>
+        <span class="string">"max"</span>: <span class="number">5000</span>,                      <span class="comment">// Configured MAX_REQUESTS</span>
+        <span class="string">"remaining"</span>: <span class="number">3153</span>,                <span class="comment">// Requests before restart</span>
+        <span class="string">"avg_duration_ms"</span>: <span class="number">12.4</span>           <span class="comment">// Average duration per request</span>
+    },
+    <span class="string">"memory"</span>: {
+        <span class="string">"current_mb"</span>: <span class="number">24.5</span>,               <span class="comment">// Current memory in MB</span>
+        <span class="string">"peak_mb"</span>: <span class="number">31.2</span>,                  <span class="comment">// Peak memory since boot</span>
+        <span class="string">"trend"</span>: <span class="string">"stable"</span>,                <span class="comment">// stable | growing | spiky | insufficient_data</span>
+        <span class="string">"growth_per_request_bytes"</span>: <span class="number">128</span>   <span class="comment">// Average growth per request</span>
+    },
+    <span class="string">"database"</span>: {
+        <span class="string">"active_connections"</span>: <span class="number">0</span>,          <span class="comment">// Open connections (should be 0)</span>
+        <span class="string">"total_queries"</span>: <span class="number">5420</span>,             <span class="comment">// Total SQL queries</span>
+        <span class="string">"pending_transactions"</span>: <span class="number">0</span>         <span class="comment">// Uncommitted transactions (danger if > 0)</span>
+    },
+    <span class="string">"gc"</span>: {
+        <span class="string">"runs"</span>: <span class="number">1847</span>,                     <span class="comment">// Number of gc_collect_cycles() calls</span>
+        <span class="string">"collected"</span>: <span class="number">23401</span>                <span class="comment">// Total objects collected</span>
+    }
+}</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>What to monitor</summary>
+    <div class="details-body">
+      <table>
+        <thead><tr><th>Field</th><th>Healthy</th><th>Alert</th></tr></thead>
+        <tbody>
+          <tr><td><code>memory.trend</code></td><td><code>stable</code></td><td><code>growing</code> for more than 10 min</td></tr>
+          <tr><td><code>memory.current_mb</code></td><td>&lt; 64 MB</td><td>&gt; 128 MB</td></tr>
+          <tr><td><code>database.pending_transactions</code></td><td><code>0</code></td><td>&gt; 0 between requests</td></tr>
+          <tr><td><code>database.active_connections</code></td><td><code>0</code> between requests</td><td>&gt; 0 continuously</td></tr>
+          <tr><td><code>requests.avg_duration_ms</code></td><td>&lt; 50 ms</td><td>&gt; 200 ms</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-warning">
+        <strong>Security:</strong> The <code>/debug/worker</code> endpoint should not be publicly accessible in production. Protect it with an auth middleware or restrict it to the internal network.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 6 : /worker CLI                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">6</span> CLI Command <code>/worker</code> <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The CLI tool provides subcommands to inspect and manage workers from the terminal.</p>
+
+  <details open>
+    <summary><code>./forge worker</code> &mdash; General status</summary>
+    <div class="details-body">
+<pre><code><span class="function">$</span> ./forge worker
+
+<span class="comment">┌─────────────────────────────────────────┐</span>
+<span class="comment">│         Worker Status                   │</span>
+<span class="comment">├─────────────────────────────────────────┤</span>
+<span class="comment">│  PID:         42                        │</span>
+<span class="comment">│  Uptime:      2h 15m 30s               │</span>
+<span class="comment">│  Requests:    1847 / 5000               │</span>
+<span class="comment">│  Memory:      24.5 MB (peak: 31.2 MB)  │</span>
+<span class="comment">│  Trend:       stable                    │</span>
+<span class="comment">│  Avg latency: 12.4 ms                  │</span>
+<span class="comment">└─────────────────────────────────────────┘</span></code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary><code>./forge worker memory</code> &mdash; Memory detail</summary>
+    <div class="details-body">
+<pre><code><span class="function">$</span> ./forge worker memory
+
+<span class="type">Memory Report</span>
+  Current usage:    <span class="number">24.5</span> MB
+  Peak usage:       <span class="number">31.2</span> MB
+  PHP memory_limit: <span class="number">256</span> MB
+  Trend:            <span class="string">stable</span>
+  Growth/request:   <span class="number">128</span> bytes
+  Samples:          <span class="number">50</span> / <span class="number">50</span> (window full)
+
+<span class="comment">  Last 10 snapshots (MB):</span>
+  <span class="number">24.2</span>  <span class="number">24.3</span>  <span class="number">24.5</span>  <span class="number">24.4</span>  <span class="number">24.5</span>  <span class="number">24.3</span>  <span class="number">24.5</span>  <span class="number">24.4</span>  <span class="number">24.5</span>  <span class="number">24.5</span></code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary><code>./forge worker logs</code> &mdash; Latest log lines</summary>
+    <div class="details-body">
+<pre><code><span class="function">$</span> ./forge worker logs
+
+<span class="comment">[2026-03-21 10:15:30]</span> <span class="type">INFO</span>    Worker started (PID: 42)
+<span class="comment">[2026-03-21 10:15:31]</span> <span class="type">INFO</span>    Routes loaded: 24 endpoints
+<span class="comment">[2026-03-21 10:15:31]</span> <span class="type">INFO</span>    Listeners discovered: 8
+<span class="comment">[2026-03-21 10:16:02]</span> <span class="type">DEBUG</span>   Request #1: GET /api/users (8.2ms)
+<span class="comment">[2026-03-21 10:16:05]</span> <span class="type">WARNING</span> Slow query: 245ms on users table
+<span class="comment">[2026-03-21 12:30:45]</span> <span class="type">INFO</span>    GC collected 142 objects</code></pre>
+
+      <div class="callout callout-info">
+        <strong>Tip:</strong> Add <code>--tail 50</code> to display the last 50 lines, or <code>--level error</code> to filter by level.
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary><code>./forge worker restart</code> &mdash; Graceful restart</summary>
+    <div class="details-body">
+<pre><code><span class="function">$</span> ./forge worker restart
+
+<span class="type">Restarting worker...</span>
+  <span class="comment">Waiting for current request to finish...</span>
+  <span class="string">Worker restarted successfully.</span>
+  New PID: <span class="number">43</span>
+  Memory freed: <span class="number">24.5</span> MB</code></pre>
+
+      <div class="callout callout-warning">
+        <strong>Note:</strong> The restart is <em>graceful</em>: the worker finishes the current request before restarting. No requests are lost.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 7 : Database in worker mode                                -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">7</span> Database in Worker Mode <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>Managing connections and transactions in worker mode is critical. An oversight can block all subsequent requests.</p>
+
+  <details open>
+    <summary>Why <code>flush()</code> is critical</summary>
+    <div class="details-body">
+      <p>Imagine this scenario without <code>flush()</code>:</p>
+
+<pre><code><span class="comment">// Request 1: starts a transaction</span>
+<span class="variable">$db</span>-><span class="function">beginTransaction</span>();
+<span class="variable">$db</span>-><span class="function">execute</span>(<span class="string">"UPDATE accounts SET balance = balance - 100 WHERE id = 1"</span>);
+<span class="comment">// Exception thrown here! No commit, no rollback.</span>
+<span class="keyword">throw new</span> <span class="type">Exception</span>(<span class="string">'Payment gateway timeout'</span>);
+
+<span class="comment">// ─── Without flush() ───</span>
+<span class="comment">// The transaction stays OPEN</span>
+<span class="comment">// Row id=1 is LOCKED (row lock)</span>
+
+<span class="comment">// Request 2: another user</span>
+<span class="variable">$db</span>-><span class="function">execute</span>(<span class="string">"SELECT * FROM accounts WHERE id = 1"</span>);
+<span class="comment">// BLOCKED! Waiting for request 1's lock...</span>
+<span class="comment">// Timeout after 30 seconds → 500 error</span>
+
+<span class="comment">// Requests 3, 4, 5...: same problem</span>
+<span class="comment">// The entire worker is paralyzed</span></code></pre>
+
+      <div class="callout callout-danger">
+        <strong>Catastrophic scenario:</strong> Without <code>flush()</code>, an unfinished transaction locks database rows. All subsequent requests touching those rows are blocked. The worker becomes unusable.
+      </div>
+
+<pre><code><span class="comment">// What flush() does:</span>
+<span class="keyword">public function</span> <span class="function">flush</span>(): <span class="type">void</span>
+{
+    <span class="keyword">foreach</span> (<span class="variable">$this</span>-><span class="variable">connections</span> <span class="keyword">as</span> <span class="variable">$conn</span>) {
+        <span class="keyword">if</span> (<span class="variable">$conn</span>-><span class="function">inTransaction</span>()) {
+            <span class="variable">$conn</span>-><span class="function">rollBack</span>();    <span class="comment">// Rollback any pending transaction</span>
+        }
+    }
+    <span class="variable">$this</span>-><span class="variable">connections</span> = [];       <span class="comment">// Close all connections</span>
+}</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Automatic reconnection</summary>
+    <div class="details-body">
+      <p>MySQL/PostgreSQL connections have a timeout (<code>wait_timeout</code>). In worker mode, a connection kept too long is closed by the server.</p>
+
+<pre><code><span class="comment">// The DatabaseManager handles reconnection</span>
+<span class="keyword">public function</span> <span class="function">getConnection</span>(<span class="type">string</span> <span class="variable">$name</span>): <span class="type">PDO</span>
+{
+    <span class="keyword">if</span> (isset(<span class="variable">$this</span>-><span class="variable">connections</span>[<span class="variable">$name</span>])) {
+        <span class="keyword">try</span> {
+            <span class="comment">// Test if the connection is still alive</span>
+            <span class="variable">$this</span>-><span class="variable">connections</span>[<span class="variable">$name</span>]-><span class="function">query</span>(<span class="string">'SELECT 1'</span>);
+        } <span class="keyword">catch</span> (<span class="type">PDOException</span>) {
+            <span class="comment">// Connection lost → create a new one</span>
+            <span class="keyword">unset</span>(<span class="variable">$this</span>-><span class="variable">connections</span>[<span class="variable">$name</span>]);
+        }
+    }
+
+    <span class="keyword">return</span> <span class="variable">$this</span>-><span class="variable">connections</span>[<span class="variable">$name</span>]
+        ??= <span class="variable">$this</span>-><span class="function">createConnection</span>(<span class="variable">$name</span>);
+}</code></pre>
+
+      <div class="callout callout-success">
+        <strong>Good news:</strong> Our <code>DatabaseManager</code> handles all of this automatically. The <code>flush()</code> in the worker cleanup guarantees a clean state between each request, and reconnection is transparent.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- PAGINATION                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="pagination">
+  <a href="02-patterns.html" class="prev">Patterns &amp; Architecture</a>
+  <a href="04-exercises.html" class="next">Practical Exercises</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

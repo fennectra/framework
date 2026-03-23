@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>14 — Webhooks, Storage & Images</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <h1>Webhooks, Storage &amp; Images</h1>
+  <p>Outbound integrations, multi-driver files and image transformations</p>
+</div>
+
+<div class="container">
+<div class="breadcrumb"><a href="index.html">Tutorials</a> <span>/</span> 14 &mdash; Webhooks, Storage &amp; Images</div>
+
+<nav class="nav">
+  <a href="01-lifecycle.html">01</a>
+  <a href="02-patterns.html">02</a>
+  <a href="03-memory.html">03</a>
+  <a href="04-exercises.html">04</a>
+  <a href="05-routing.html">05</a>
+  <a href="06-orm.html">06</a>
+  <a href="07-auth-di-events.html">07</a>
+  <a href="08-exercises-framework.html">08</a>
+  <a href="09-profiler-security.html">09</a>
+  <a href="10-migrations-cache.html">10</a>
+  <a href="11-scheduler-queue.html">11</a>
+  <a href="12-notifications-oauth.html">12</a>
+  <a href="13-performance.html">13</a>
+  <a href="14-webhooks-storage.html" class="active">14</a>
+  <a href="15-compliance.html">15</a>
+</nav>
+
+<!-- ═══════════════════════════════════════════
+     1. WebhookManager
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">1</span> WebhookManager <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The webhook system allows sending HTTP notifications to external systems when events occur in your application. Each webhook is signed with HMAC-SHA256 to guarantee authenticity.</p>
+
+  <details open>
+    <summary>Automatic dispatch via Events</summary>
+    <div class="details-body">
+      <p>Les webhooks sont dispatches automatically quand un evenement est emis. The <code>WebhookManager</code> filters registered webhooks listening for that event:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Fennec\Core\Webhook\WebhookManager</span>;
+
+<span class="comment">// Manual webhook dispatch</span>
+<span class="type">WebhookManager</span>::<span class="function">dispatch</span>(<span class="string">'order.shipped'</span>, [
+    <span class="string">'order_id'</span> => <span class="number">42</span>,
+    <span class="string">'tracking'</span> => <span class="string">'FR123456789'</span>,
+]);
+
+<span class="comment">// Ou automatically via le systeme d'events :</span>
+<span class="type">Event</span>::<span class="function">dispatch</span>(<span class="string">'order.shipped'</span>, <span class="variable">$data</span>);
+<span class="comment">// → The WebhookManager detects registered webhooks</span>
+<span class="comment">//   pour 'order.shipped' et les dispatch automatically</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>HMAC-SHA256 Signature</summary>
+    <div class="details-body">
+      <p>Each webhook request includes a signature in the <code>X-Webhook-Signature</code> header. The recipient can verify authenticity:</p>
+<pre><code><span class="comment">// Server-side (sending):</span>
+<span class="variable">$payload</span> = <span class="function">json_encode</span>(<span class="variable">$data</span>);
+<span class="variable">$signature</span> = <span class="function">hash_hmac</span>(<span class="string">'sha256'</span>, <span class="variable">$payload</span>, <span class="variable">$webhook</span>-><span class="variable">secret</span>);
+
+<span class="comment">// Sent headers:</span>
+<span class="comment">// X-Webhook-Signature: sha256=a1b2c3d4...</span>
+<span class="comment">// X-Webhook-Event: order.shipped</span>
+<span class="comment">// X-Webhook-Delivery: uuid-v4</span>
+<span class="comment">// Content-Type: application/json</span>
+
+<span class="comment">// Recipient-side (verification):</span>
+<span class="variable">$expected</span> = <span class="function">hash_hmac</span>(<span class="string">'sha256'</span>, <span class="variable">$body</span>, <span class="variable">$secret</span>);
+<span class="keyword">if</span> (!<span class="function">hash_equals</span>(<span class="string">'sha256='</span> . <span class="variable">$expected</span>, <span class="variable">$signatureHeader</span>)) {
+    <span class="keyword">return</span> <span class="function">response</span>(<span class="number">401</span>, <span class="string">'Invalid signature'</span>);
+}</code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Retry with exponential backoff</summary>
+    <div class="details-body">
+      <p>Le <code>WebhookDeliveryJob</code> retente automatically les livraisons echouees avec un backoff exponentiel :</p>
+      <table>
+        <thead><tr><th>Attempt</th><th>Delay</th><th>Cumulative time</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Immediate</td><td>0s</td></tr>
+          <tr><td>2</td><td>10s</td><td>10s</td></tr>
+          <tr><td>3</td><td>30s</td><td>40s</td></tr>
+          <tr><td>4</td><td>90s</td><td>~2min</td></tr>
+          <tr><td>5</td><td>270s</td><td>~7min</td></tr>
+          <tr><td>6</td><td>810s</td><td>~20min</td></tr>
+        </tbody>
+      </table>
+<pre><code><span class="keyword">class</span> <span class="type">WebhookDeliveryJob</span> <span class="keyword">extends</span> <span class="type">AbstractJob</span>
+{
+    <span class="keyword">public int</span> <span class="variable">$maxRetries</span> = <span class="number">5</span>;
+
+    <span class="keyword">public function</span> <span class="function">retryDelay</span>(<span class="type">int</span> <span class="variable">$attempt</span>): <span class="type">int</span>
+    {
+        <span class="comment">// Exponential backoff: 10 * 3^attempt</span>
+        <span class="keyword">return</span> <span class="number">10</span> * (<span class="number">3</span> ** <span class="variable">$attempt</span>);
+    }
+}</code></pre>
+      <div class="callout callout-info">
+        <strong>webhook_deliveries table.</strong>
+        Each attempt is tracked in the <code>webhook_deliveries</code> table with the HTTP response status, response time and body in case of error.
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Admin API (CRUD)</summary>
+    <div class="details-body">
+      <p>The webhook module generated by <code>make:webhook</code> provides a complete admin API:</p>
+      <table>
+        <thead><tr><th>Endpoint</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET /api/webhooks</code></td><td>List registered webhooks</td></tr>
+          <tr><td><code>POST /api/webhooks</code></td><td>Create a new webhook</td></tr>
+          <tr><td><code>PUT /api/webhooks/{id}</code></td><td>Update a webhook</td></tr>
+          <tr><td><code>DELETE /api/webhooks/{id}</code></td><td>Delete a webhook</td></tr>
+          <tr><td><code>GET /api/webhooks/{id}/deliveries</code></td><td>Delivery history</td></tr>
+          <tr><td><code>POST /api/webhooks/{id}/retry</code></td><td>Retry failed deliveries</td></tr>
+        </tbody>
+      </table>
+<pre><code><span class="comment"># Generate the complete module</span>
+<span class="keyword">./forge</span> <span class="function">make:webhook</span>
+
+<span class="comment"># Creates: migration + Models + DTOs + Controller + Routes</span></code></pre>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     2. Storage Facade
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">2</span> Storage Multi-Driver <span class="badge badge-beginner">Beginner</span></h2>
+
+  <p>The <code>Storage</code> facade offers a unified API to store, read and delete files, regardless of the underlying driver: local, Amazon S3 or Google Cloud Storage.</p>
+
+  <details open>
+    <summary>Basic API</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Fennec\Core\Storage\Storage</span>;
+
+<span class="comment">// Store a file</span>
+<span class="type">Storage</span>::<span class="function">put</span>(<span class="string">'avatars/user-42.jpg'</span>, <span class="variable">$fileContent</span>);
+
+<span class="comment">// Read a file</span>
+<span class="variable">$content</span> = <span class="type">Storage</span>::<span class="function">get</span>(<span class="string">'avatars/user-42.jpg'</span>);
+
+<span class="comment">// Delete a file</span>
+<span class="type">Storage</span>::<span class="function">delete</span>(<span class="string">'avatars/user-42.jpg'</span>);
+
+<span class="comment">// Get the public URL</span>
+<span class="variable">$url</span> = <span class="type">Storage</span>::<span class="function">url</span>(<span class="string">'avatars/user-42.jpg'</span>);
+<span class="comment">// Local : /storage/avatars/user-42.jpg</span>
+<span class="comment">// S3 :    https://bucket.s3.amazonaws.com/avatars/user-42.jpg</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Driver configuration</summary>
+    <div class="details-body">
+<pre><code><span class="comment"># .env — Driver local (by default)</span>
+<span class="variable">STORAGE_DRIVER</span>=<span class="string">local</span>
+
+<span class="comment"># .env — Amazon S3</span>
+<span class="variable">STORAGE_DRIVER</span>=<span class="string">s3</span>
+<span class="variable">AWS_BUCKET</span>=<span class="string">my-app-uploads</span>
+<span class="variable">AWS_REGION</span>=<span class="string">eu-west-3</span>
+<span class="variable">AWS_ACCESS_KEY_ID</span>=<span class="string">AKIA...</span>
+<span class="variable">AWS_SECRET_ACCESS_KEY</span>=<span class="string">secret...</span>
+
+<span class="comment"># .env — Google Cloud Storage</span>
+<span class="variable">STORAGE_DRIVER</span>=<span class="string">gcs</span>
+<span class="variable">GCS_BUCKET</span>=<span class="string">my-app-uploads</span>
+<span class="variable">GCS_KEY_FILE</span>=<span class="string">/path/to/service-account.json</span></code></pre>
+      <div class="callout callout-info">
+        <strong>Public symlink.</strong>
+        With the local driver, run <code>./forge storage:link</code> to create the <code>public/storage → storage/</code> symlink and make files accessible via HTTP.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     3. ImageTransformer
+     ═══════════════════════════════════════════ -->
+
+<section class="section">
+  <h2 class="section-title"><span class="icon">3</span> ImageTransformer <span class="badge badge-intermediate">Intermediate</span></h2>
+
+  <p>The <code>ImageTransformer</code> offers a chainable pipeline to resize, crop and convert images. Based on the PHP GD extension, it requires no external dependencies.</p>
+
+  <details open>
+    <summary>Chainable pipeline</summary>
+    <div class="details-body">
+<pre><code><span class="keyword">use</span> <span class="type">Fennec\Core\Image\ImageTransformer</span>;
+
+<span class="comment">// Simple resize</span>
+<span class="type">ImageTransformer</span>::<span class="function">resize</span>(<span class="string">'photo.jpg'</span>, <span class="number">800</span>);
+
+<span class="comment">// Full pipeline</span>
+<span class="type">ImageTransformer</span>::<span class="function">make</span>(<span class="string">'photo.jpg'</span>)
+    -><span class="function">resize</span>(<span class="number">800</span>)             <span class="comment">// Max width 800px</span>
+    -><span class="function">crop</span>(<span class="number">400</span>, <span class="number">400</span>)         <span class="comment">// Square crop</span>
+    -><span class="function">format</span>(<span class="string">'webp'</span>)           <span class="comment">// WebP conversion</span>
+    -><span class="function">apply</span>();                 <span class="comment">// Apply transformations</span></code></pre>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Attribut #[FileUpload]</summary>
+    <div class="details-body">
+      <p>The <code>#[FileUpload]</code> attribute on a controller method enables automatic parsing of <code>multipart/form-data</code> requests and OpenAPI documentation:</p>
+<pre><code><span class="keyword">use</span> <span class="type">Fennec\Attributes\FileUpload</span>;
+<span class="keyword">use</span> <span class="type">Fennec\Attributes\ImageTransform</span>;
+
+<span class="keyword">class</span> <span class="type">AvatarController</span>
+{
+    #[<span class="type">FileUpload</span>]
+    #[<span class="type">ImageTransform</span>(<span class="string">width</span>: <span class="number">200</span>, <span class="string">height</span>: <span class="number">200</span>, <span class="string">format</span>: <span class="string">'webp'</span>)]
+    <span class="keyword">public function</span> <span class="function">upload</span>(<span class="type">array</span> <span class="variable">$request</span>): <span class="type">array</span>
+    {
+        <span class="comment">// $request['file'] contains the uploaded file</span>
+        <span class="variable">$path</span> = <span class="type">Storage</span>::<span class="function">put</span>(
+            <span class="string">'avatars/'</span> . <span class="variable">$request</span>[<span class="string">'user_id'</span>] . <span class="string">'.webp'</span>,
+            <span class="variable">$request</span>[<span class="string">'file'</span>][<span class="string">'content'</span>]
+        );
+
+        <span class="keyword">return</span> [<span class="string">'url'</span> => <span class="type">Storage</span>::<span class="function">url</span>(<span class="variable">$path</span>)];
+    }
+}</code></pre>
+      <div class="callout callout-warning">
+        <strong>Extension GD requise.</strong>
+        Le <code>ImageTransformer</code> necessite l'extension PHP GD. Le Dockerfile du framework l'inclut automatically. Verifiez avec <code>php -m | grep gd</code>.
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     Pagination
+     ═══════════════════════════════════════════ -->
+
+<div class="pagination">
+  <a href="13-performance.html" class="prev">Performance &amp; Lazy Loading</a>
+  <a href="15-compliance.html" class="next">Compliance &amp; Security</a>
+</div>
+
+</div>
+
+<div class="footer">Fennec PHP Framework &mdash; Tutorials &copy; 2026</div>
+</body>
+</html>

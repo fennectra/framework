@@ -1,0 +1,609 @@
+/* ═══════════════════════════════════════════
+   Fennec — Tutorials
+   CSS Nesting · Zero build
+   ═══════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #f6f2ec;
+  --surface: #fffdf9;
+  --surface2: #efe9df;
+  --border: #ddd5c8;
+  --text: #1a1610;
+  --text-muted: #8a7e6e;
+  --accent: #6b4c2a;
+  --accent-light: #8b6b45;
+  --green: #3d6b3d;
+  --yellow: #7a6520;
+  --red: #7a3535;
+  --blue: #3d5570;
+  --code-bg: #1a1610;
+  --code-text: #ddd5c8;
+  --serif: 'DM Serif Display', Georgia, serif;
+  --sans: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--sans);
+  font-weight: 400;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+/* ── Hero ── */
+
+.hero {
+  padding: 5rem 2rem 4rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 10%;
+    right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+
+  & h1 {
+    font-family: var(--serif);
+    font-size: 2.8rem;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 1rem;
+  }
+
+  & p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 300;
+    max-width: 420px;
+    margin: 0 auto;
+    letter-spacing: 0.01em;
+  }
+
+  & .hero-sub {
+    margin-top: 2rem;
+    font-size: 0.72rem;
+    color: var(--accent-light);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-weight: 500;
+  }
+}
+
+/* ── Layout ── */
+
+.container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+/* ── Navigation ── */
+
+.nav {
+  display: flex;
+  gap: 0;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 3rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  padding: 0.6rem 0;
+  z-index: 10;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+
+  & a {
+    padding: 0.4rem 0.7rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    transition: color 0.15s;
+    position: relative;
+
+    &:hover { color: var(--text); }
+
+    &:not(:last-child)::after {
+      content: '\00b7';
+      position: absolute;
+      right: -2px;
+      color: var(--border);
+    }
+
+    &.active { color: var(--accent); font-weight: 500; }
+  }
+}
+
+/* ── Breadcrumb ── */
+
+.breadcrumb {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 2.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+
+  & a {
+    color: var(--accent-light);
+    text-decoration: none;
+    &:hover { color: var(--accent); }
+  }
+
+  & span { margin: 0 0.5rem; color: var(--border); }
+}
+
+/* ── Sections ── */
+
+.section {
+  margin-bottom: 4rem;
+}
+
+.section-title {
+  font-family: var(--serif);
+  font-size: 1.4rem;
+  font-weight: 400;
+  margin-bottom: 1.5rem;
+  color: var(--text);
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  letter-spacing: -0.01em;
+
+  & .icon {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-weight: 300;
+  }
+}
+
+/* ── Badges ── */
+
+.badge {
+  display: inline-block;
+  padding: 0.08rem 0.45rem;
+  border-radius: 0;
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-family: var(--sans);
+  border: 1px solid;
+  background: transparent;
+}
+
+.badge-beginner    { color: var(--green); border-color: var(--green); }
+.badge-intermediate { color: var(--yellow); border-color: var(--yellow); }
+.badge-advanced    { color: var(--red); border-color: var(--red); }
+.badge-critical    { color: var(--red); border-color: var(--red); background: rgba(122,53,53,0.06); }
+.badge-safe        { color: var(--green); border-color: var(--green); background: rgba(61,107,61,0.06); }
+.badge-warning     { color: var(--yellow); border-color: var(--yellow); background: rgba(122,101,32,0.06); }
+
+/* ── Accordions ── */
+
+details {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+
+  &:first-of-type { border-top: 1px solid var(--border); }
+
+  &[open] > summary { color: var(--accent); }
+}
+
+summary {
+  padding: 0.9rem 0;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  list-style: none;
+  user-select: none;
+  transition: color 0.15s;
+  letter-spacing: 0.01em;
+
+  &:hover { color: var(--accent); }
+  &::-webkit-details-marker { display: none; }
+
+  &::before {
+    content: '\2192';
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    display: inline-block;
+    width: 1.2rem;
+    flex-shrink: 0;
+  }
+}
+
+details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.details-body {
+  padding: 0 0 1.5rem 1.7rem;
+  font-size: 0.92rem;
+}
+
+/* ── Code ── */
+
+pre {
+  background: var(--code-bg);
+  border: none;
+  border-radius: 0;
+  padding: 1.2rem 1.4rem;
+  overflow-x: auto;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  margin: 1rem 0;
+  color: var(--code-text);
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent-light);
+  }
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.84em;
+}
+
+:not(pre) > code {
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+  font-size: 0.88em;
+  font-weight: 500;
+}
+
+/* Syntax — terre chaude */
+.keyword  { color: #c4a882; }
+.string   { color: #a3b578; }
+.comment  { color: #5c5445; font-style: italic; }
+.function { color: #8aacbf; }
+.variable { color: #c49080; }
+.type     { color: #c4b882; }
+.number   { color: #bf9a6a; }
+
+/* ── Comparisons ── */
+
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 1rem 0;
+
+  @media (max-width: 700px) { grid-template-columns: 1fr; }
+}
+
+.compare-bad,
+.compare-good {
+  border-radius: 0;
+  overflow: hidden;
+
+  & pre {
+    margin: 0;
+    border-radius: 0;
+
+    &::before { display: none; }
+  }
+}
+
+.compare-bad  { border-left: 3px solid var(--red); }
+.compare-good { border-left: 3px solid var(--green); }
+
+.compare-label {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--code-bg);
+  color: var(--code-text);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.compare-bad .compare-label  { color: #c07070; }
+.compare-good .compare-label { color: #80b080; }
+
+/* ── Callouts ── */
+
+.callout {
+  padding: 0 0 0 1rem;
+  margin: 1.5rem 0;
+  border-left: 2px solid var(--border);
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  font-style: italic;
+
+  & strong {
+    display: block;
+    font-style: normal;
+    margin-bottom: 0.1rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+
+  & code {
+    font-style: normal;
+  }
+}
+
+.callout-info    { border-color: var(--accent-light); }
+.callout-warning { border-color: var(--yellow); }
+.callout-danger  { border-color: var(--red); }
+.callout-success { border-color: var(--green); }
+
+/* ── Exercises ── */
+
+.exercise {
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding: 1.5rem 0;
+  margin: 0;
+
+  & .exercise-title {
+    font-family: var(--serif);
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.05rem;
+  }
+
+  & details {
+    border: none;
+    border-top: none;
+
+    &:first-of-type { border-top: none; }
+  }
+
+  & summary {
+    font-size: 0.82rem;
+    color: var(--accent-light);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+
+    &::before { content: '+'; }
+  }
+
+  & details[open] > summary::before { content: '\2013'; transform: none; }
+}
+
+/* ── Diagrams ── */
+
+.diagram {
+  background: var(--code-bg);
+  border: none;
+  border-radius: 0;
+  padding: 1.4rem;
+  margin: 1rem 0;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+  color: #a09585;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent-light);
+  }
+}
+
+/* ── Tables ── */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.85rem;
+
+  & th,
+  & td {
+    padding: 0.6rem 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  & th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 2px solid var(--border);
+  }
+
+  & tr:last-child td { border-bottom: none; }
+}
+
+/* ── Checklist ── */
+
+.checklist {
+  list-style: none;
+  padding: 0;
+  columns: 2;
+  column-gap: 2rem;
+
+  @media (max-width: 600px) { columns: 1; }
+
+  & li {
+    padding: 0.4rem 0 0.4rem 1.5rem;
+    position: relative;
+    font-size: 0.85rem;
+    break-inside: avoid;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0.7rem;
+      width: 8px;
+      height: 8px;
+      border: 1.5px solid var(--border);
+      border-radius: 0;
+    }
+  }
+}
+
+/* ── Cards (hub) ── */
+
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin: 1.5rem 0;
+  background: var(--border);
+  border: 1px solid var(--border);
+
+  @media (max-width: 600px) { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: var(--surface);
+  padding: 1.8rem 1.5rem;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.2s;
+
+  &:hover { background: var(--bg); }
+
+  & .card-number {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.6rem;
+    font-weight: 500;
+  }
+
+  & h3 {
+    font-family: var(--serif);
+    font-size: 1.1rem;
+    font-weight: 400;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
+  }
+
+  & p {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.55;
+    margin: 0;
+    font-weight: 300;
+  }
+}
+
+/* ── Footer ── */
+
+.footer {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  margin-top: 2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 500;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 15%;
+    right: 15%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+}
+
+/* ── Pagination ── */
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  font-size: 0.8rem;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+
+  & a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+
+    &:hover { color: var(--text); }
+  }
+
+  & .prev::before { content: '\2190\00a0\00a0'; color: var(--text-muted); }
+  & .next::after { content: '\00a0\00a0\2192'; color: var(--text-muted); }
+}
+
+/* ── Prose ── */
+
+p { margin-bottom: 0.85rem; font-weight: 300; }
+ul, ol { margin: 0.5rem 0 0.85rem 1.2rem; font-weight: 300; }
+li { margin-bottom: 0.3rem; }
