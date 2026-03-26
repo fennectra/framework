@@ -114,20 +114,33 @@ class QualityCommand implements CommandInterface
                 // App mode: use app's test config
                 $configFile = is_file("{$testDir}/phpunit.xml") ? "{$testDir}/phpunit.xml" : "{$testDir}/phpunit.xml.dist";
                 $testCmd = "{$phpunitBin} --configuration=" . escapeshellarg($configFile);
+            } elseif ($isApp) {
+                // App mode without test config: check for root-level phpunit.xml
+                $rootConfig = FENNEC_BASE_PATH . '/phpunit.xml';
+                $rootConfigDist = FENNEC_BASE_PATH . '/phpunit.xml.dist';
+                if (is_file($rootConfig) || is_file($rootConfigDist)) {
+                    $configFile = is_file($rootConfig) ? $rootConfig : $rootConfigDist;
+                    $testCmd = "{$phpunitBin} --configuration=" . escapeshellarg($configFile);
+                } else {
+                    echo "  \033[33m⚠ No test configuration found (create tests/phpunit.xml), skipped\033[0m\n\n";
+                    $testCmd = null;
+                }
             } else {
                 // Framework mode: use framework config
                 $configDir = $fennecDir . '/config';
                 $testCmd = "{$phpunitBin} --configuration=" . escapeshellarg("{$configDir}/phpunit.xml");
             }
 
-            $testResult = 0;
-            passthru($testCmd, $testResult);
+            if ($testCmd !== null) {
+                $testResult = 0;
+                passthru($testCmd, $testResult);
 
-            if ($testResult === 0) {
-                echo "  \033[32m✓ Tests OK\033[0m\n\n";
-            } else {
-                echo "  \033[31m✗ Tests failed\033[0m\n\n";
-                $exitCode = 1;
+                if ($testResult === 0) {
+                    echo "  \033[32m✓ Tests OK\033[0m\n\n";
+                } else {
+                    echo "  \033[31m✗ Tests failed\033[0m\n\n";
+                    $exitCode = 1;
+                }
             }
         } else {
             echo "  \033[33m⚠ phpunit not found, skipped\033[0m\n\n";
