@@ -576,24 +576,40 @@ HTML;
 
     /**
      * Extract tag name and group from a route path.
-     * /admin/users/... → group "Admin", tag "Users"
-     * /health          → group "General", tag "Health"
+     *
+     * Only static segments count — dynamic params ({id}, {slug}) are ignored.
+     *
+     * 1 static segment:  /health              → group "General", tag "General"
+     * 2 static segments: /app/manager         → group "App",     tag "App"       (flat)
+     * 3+ static segments: /app/dashboard/kpi  → group "App",     tag "Dashboard" (nested)
      *
      * @return array{tag: string, group: string}
      */
     private function extractTagAndGroup(string $path): array
     {
         $segments = array_values(array_filter(explode('/', $path)));
+        // Filter out dynamic params like {id}
+        $static = array_values(array_filter($segments, fn ($s) => !str_starts_with($s, '{')));
 
-        if (count($segments) >= 2) {
+        if (count($static) >= 3) {
+            // /app/dashboard/kpi → group "App", tag "Dashboard"
             return [
-                'tag' => ucfirst($segments[1]),
-                'group' => ucfirst($segments[0]),
+                'tag' => ucfirst($static[1]),
+                'group' => ucfirst($static[0]),
+            ];
+        }
+
+        if (count($static) >= 1) {
+            // /app/manager → group "App", tag "App" (flat — one level)
+            // /health      → group "Health", tag "Health"
+            return [
+                'tag' => ucfirst($static[0]),
+                'group' => ucfirst($static[0]),
             ];
         }
 
         return [
-            'tag' => ucfirst($segments[0] ?? 'General'),
+            'tag' => 'General',
             'group' => 'General',
         ];
     }
