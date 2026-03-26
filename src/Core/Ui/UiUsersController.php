@@ -25,7 +25,7 @@ class UiUsersController
             $params[] = "%{$search}%";
         }
         if ($role) {
-            $conditions[] = 'id IN (SELECT user_id FROM role_user WHERE role_id = (SELECT id FROM roles WHERE name = ?))';
+            $conditions[] = 'id IN (SELECT user_id FROM user_roles WHERE role_id = (SELECT id FROM roles WHERE name = ?))';
             $params[] = $role;
         }
         if ($status === 'active') {
@@ -42,7 +42,7 @@ class UiUsersController
             foreach ($result['data'] as &$row) {
                 unset($row['password']);
                 $roles = DB::raw(
-                    'SELECT r.id, r.name FROM roles r JOIN role_user ru ON r.id = ru.role_id WHERE ru.user_id = ?',
+                    'SELECT r.id, r.name FROM roles r JOIN user_roles ru ON r.id = ru.role_id WHERE ru.user_id = ?',
                     [$row['id']]
                 )->fetchAll();
                 $row['roles'] = $roles;
@@ -68,14 +68,14 @@ class UiUsersController
             unset($user['password']);
 
             $user['roles'] = DB::raw(
-                'SELECT r.id, r.name FROM roles r JOIN role_user ru ON r.id = ru.role_id WHERE ru.user_id = ?',
+                'SELECT r.id, r.name FROM roles r JOIN user_roles ru ON r.id = ru.role_id WHERE ru.user_id = ?',
                 [$id]
             )->fetchAll();
 
             $user['permissions'] = DB::raw(
                 'SELECT DISTINCT p.id, p.name FROM permissions p
-                 JOIN permission_role pr ON p.id = pr.permission_id
-                 JOIN role_user ru ON pr.role_id = ru.role_id
+                 JOIN role_permissions pr ON p.id = pr.permission_id
+                 JOIN user_roles ru ON pr.role_id = ru.role_id
                  WHERE ru.user_id = ?',
                 [$id]
             )->fetchAll();
@@ -110,16 +110,16 @@ class UiUsersController
             return;
         }
 
-        $fields[] = 'updated_at = NOW()';
+        $fields[] = 'updated_at = CURRENT_TIMESTAMP';
         $params[] = $id;
 
         try {
             DB::raw('UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?', $params);
 
             if (isset($body['roles']) && is_array($body['roles'])) {
-                DB::raw('DELETE FROM role_user WHERE user_id = ?', [$id]);
+                DB::raw('DELETE FROM user_roles WHERE user_id = ?', [$id]);
                 foreach ($body['roles'] as $roleId) {
-                    DB::raw('INSERT INTO role_user (user_id, role_id) VALUES (?, ?)', [$id, (int) $roleId]);
+                    DB::raw('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)', [$id, (int) $roleId]);
                 }
             }
 
@@ -133,7 +133,7 @@ class UiUsersController
     public function toggle(int $id): void
     {
         try {
-            DB::raw('UPDATE users SET is_active = NOT is_active, updated_at = NOW() WHERE id = ?', [$id]);
+            DB::raw('UPDATE users SET is_active = NOT is_active, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [$id]);
             SecurityLogger::track('user.toggled', ['id' => $id, 'by' => 'admin_ui']);
 
             Response::json(['success' => true]);
@@ -155,7 +155,7 @@ class UiUsersController
 
         try {
             $hash = password_hash($password, PASSWORD_BCRYPT);
-            DB::raw('UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?', [$hash, $id]);
+            DB::raw('UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [$hash, $id]);
             SecurityLogger::track('user.password_reset', ['id' => $id, 'by' => 'admin_ui']);
 
             Response::json(['success' => true]);
@@ -167,7 +167,7 @@ class UiUsersController
     public function delete(int $id): void
     {
         try {
-            DB::raw('UPDATE users SET deleted_at = NOW() WHERE id = ?', [$id]);
+            DB::raw('UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [$id]);
             SecurityLogger::track('user.deleted', ['id' => $id, 'by' => 'admin_ui']);
 
             Response::json(['success' => true]);
@@ -185,11 +185,11 @@ class UiUsersController
 
             foreach ($roles as &$role) {
                 $role['permissions'] = DB::raw(
-                    'SELECT p.id, p.name FROM permissions p JOIN permission_role pr ON p.id = pr.permission_id WHERE pr.role_id = ?',
+                    'SELECT p.id, p.name FROM permissions p JOIN role_permissions pr ON p.id = pr.permission_id WHERE pr.role_id = ?',
                     [$role['id']]
                 )->fetchAll();
                 $role['users_count'] = (int) (DB::raw(
-                    'SELECT COUNT(*) as cnt FROM role_user WHERE role_id = ?',
+                    'SELECT COUNT(*) as cnt FROM user_roles WHERE role_id = ?',
                     [$role['id']]
                 )->fetchAll()[0]['cnt'] ?? 0);
             }
@@ -214,7 +214,7 @@ class UiUsersController
 
         try {
             DB::raw(
-                'INSERT INTO roles (name, description, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
+                'INSERT INTO roles (name, description, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
                 [$name, $description]
             );
             SecurityLogger::track('role.created', ['name' => $name, 'by' => 'admin_ui']);
@@ -241,15 +241,15 @@ class UiUsersController
         }
 
         if ($fields) {
-            $fields[] = 'updated_at = NOW()';
+            $fields[] = 'updated_at = CURRENT_TIMESTAMP';
             $params[] = $id;
             DB::raw('UPDATE roles SET ' . implode(', ', $fields) . ' WHERE id = ?', $params);
         }
 
         if (isset($body['permissions']) && is_array($body['permissions'])) {
-            DB::raw('DELETE FROM permission_role WHERE role_id = ?', [$id]);
+            DB::raw('DELETE FROM role_permissions WHERE role_id = ?', [$id]);
             foreach ($body['permissions'] as $permId) {
-                DB::raw('INSERT INTO permission_role (role_id, permission_id) VALUES (?, ?)', [$id, (int) $permId]);
+                DB::raw('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)', [$id, (int) $permId]);
             }
         }
 
@@ -260,8 +260,8 @@ class UiUsersController
     public function deleteRole(int $id): void
     {
         try {
-            DB::raw('DELETE FROM permission_role WHERE role_id = ?', [$id]);
-            DB::raw('DELETE FROM role_user WHERE role_id = ?', [$id]);
+            DB::raw('DELETE FROM role_permissions WHERE role_id = ?', [$id]);
+            DB::raw('DELETE FROM user_roles WHERE role_id = ?', [$id]);
             DB::raw('DELETE FROM roles WHERE id = ?', [$id]);
             SecurityLogger::track('role.deleted', ['id' => $id, 'by' => 'admin_ui']);
 
@@ -297,7 +297,7 @@ class UiUsersController
 
         try {
             DB::raw(
-                'INSERT INTO permissions (name, description, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
+                'INSERT INTO permissions (name, description, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
                 [$name, $description]
             );
 
@@ -310,7 +310,7 @@ class UiUsersController
     public function deletePermission(int $id): void
     {
         try {
-            DB::raw('DELETE FROM permission_role WHERE permission_id = ?', [$id]);
+            DB::raw('DELETE FROM role_permissions WHERE permission_id = ?', [$id]);
             DB::raw('DELETE FROM permissions WHERE id = ?', [$id]);
 
             Response::json(['success' => true]);

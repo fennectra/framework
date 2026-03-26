@@ -44,7 +44,7 @@ class UiWebhooksController
         try {
             $eventsJson = json_encode($events);
             DB::raw(
-                'INSERT INTO webhooks (name, url, secret, events, is_active, description, created_at, updated_at) VALUES (?, ?, ?, ?, true, ?, NOW(), NOW())',
+                'INSERT INTO webhooks (name, url, secret, events, is_active, description, created_at, updated_at) VALUES (?, ?, ?, ?, true, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
                 [$name, $url, $secret, $eventsJson, $description]
             );
 
@@ -91,7 +91,7 @@ class UiWebhooksController
             return;
         }
 
-        $fields[] = 'updated_at = NOW()';
+        $fields[] = 'updated_at = CURRENT_TIMESTAMP';
         $params[] = $id;
 
         try {
@@ -134,7 +134,7 @@ class UiWebhooksController
     public function toggle(int $id): void
     {
         try {
-            DB::raw('UPDATE webhooks SET is_active = NOT is_active, updated_at = NOW() WHERE id = ?', [$id]);
+            DB::raw('UPDATE webhooks SET is_active = NOT is_active, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [$id]);
             Webhook\WebhookManager::getInstance()->clearCache();
 
             Response::json(['success' => true]);

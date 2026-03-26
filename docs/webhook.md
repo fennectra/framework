@@ -219,12 +219,12 @@ WebhookManager::dispatch('payment.received', [
 | `src/Core/Notification/Channels/WebhookChannel.php` | Webhook notification channel | 2026-03-22 |
 | `src/Commands/MakeWebhookCommand.php` | Complete module generator | 2026-03-22 |
 | `database/migrations/2026_03_22_012911_create_webhooks_tables.php` | Migration (pgsql/mysql/sqlite) | 2026-03-22 |
-| `app/Controllers/WebhookController.php` | CRUD + deliveries + stats + retry | 2026-03-22 |
-| `app/Models/Webhook.php` | ORM Model (casts, relations, stats) | 2026-03-22 |
-| `app/Models/WebhookDelivery.php` | ORM Model (stats, failures) | 2026-03-22 |
-| `app/Dto/WebhookStoreRequest.php` | Creation/update DTO | 2026-03-22 |
-| `app/Dto/WebhookItem.php` | Webhook response DTO | 2026-03-22 |
-| `app/Dto/WebhookDeliveryItem.php` | Delivery response DTO | 2026-03-22 |
-| `app/Dto/WebhookResponse.php` | Response wrapper DTO | 2026-03-22 |
-| `app/Dto/WebhookListRequest.php` | Pagination + filter DTO | 2026-03-22 |
-| `app/Routes/webhook.php` | Admin routes | 2026-03-22 |
+| `app/Controllers/WebhookController.php` | CRUD + deliveries + stats + retry | 2026-03-23 |
+| `app/Models/Webhook.php` | ORM Model (casts, relations, stats) | 2026-03-23 |
+| `app/Models/WebhookDelivery.php` | ORM Model (stats, failures) | 2026-03-23 |
+| `app/Dto/WebhookStoreRequest.php` | Creation/update DTO | 2026-03-23 |
+| `app/Dto/WebhookItem.php` | Webhook response DTO | 2026-03-23 |
+| `app/Dto/WebhookDeliveryItem.php` | Delivery response DTO | 2026-03-23 |
+| `app/Dto/WebhookResponse.php` | Response wrapper DTO | 2026-03-23 |
+| `app/Dto/WebhookListRequest.php` | Pagination + filter DTO | 2026-03-23 |
+| `app/Routes/webhook.php` | Admin routes | 2026-03-23 |

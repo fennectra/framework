@@ -168,7 +168,7 @@ class Invoice extends Model
                 COALESCE(SUM(total_ht), 0) as total_ht,
                 COALESCE(SUM(total_ttc), 0) as total_ttc
              FROM invoices
-             WHERE created_at >= NOW() - INTERVAL \'12 months\'
+             WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL \'12 months\'
              GROUP BY TO_CHAR(created_at, \'YYYY-MM\')
              ORDER BY month DESC'
         );
@@ -942,8 +942,8 @@ PHP;
             . ' credit_reason TEXT,'
             . ' hash VARCHAR(64) NOT NULL DEFAULT \'\','
             . ' previous_hash VARCHAR(64) NOT NULL DEFAULT \'0\','
-            . ' created_at TIMESTAMP DEFAULT NOW(),'
-            . ' updated_at TIMESTAMP DEFAULT NOW()'
+            . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
+            . ' updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
             . ');'
             . ' CREATE INDEX IF NOT EXISTS idx_invoices_number ON invoices (number);'
             . ' CREATE INDEX IF NOT EXISTS idx_invoices_created ON invoices (created_at);'
@@ -956,7 +956,7 @@ PHP;
             . ' tva_rate DECIMAL(5,2) NOT NULL DEFAULT 20,'
             . ' total_ht DECIMAL(12,2) NOT NULL DEFAULT 0,'
             . ' total_ttc DECIMAL(12,2) NOT NULL DEFAULT 0,'
-            . ' created_at TIMESTAMP DEFAULT NOW()'
+            . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
             . ');'
             . ' CREATE INDEX IF NOT EXISTS idx_invoice_lines_invoice ON invoice_lines (invoice_id);'
             . ' CREATE TABLE IF NOT EXISTS nf525_closings ('
@@ -971,7 +971,7 @@ PHP;
             . ' document_count INT NOT NULL DEFAULT 0,'
             . ' hash VARCHAR(64) NOT NULL,'
             . ' previous_hash VARCHAR(64) NOT NULL DEFAULT \'0\','
-            . ' created_at TIMESTAMP DEFAULT NOW(),'
+            . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
             . ' UNIQUE(type, period_start, period_end)'
             . ');'
             . ' CREATE TABLE IF NOT EXISTS nf525_journal ('
@@ -982,7 +982,7 @@ PHP;
             . ' details JSONB DEFAULT \'{}\'::jsonb,'
             . ' user_id BIGINT,'
             . ' ip_address VARCHAR(45),'
-            . ' created_at TIMESTAMP DEFAULT NOW()'
+            . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
             . ');'
             . ' CREATE INDEX IF NOT EXISTS idx_nf525_journal_event ON nf525_journal (event);'
             . ' CREATE INDEX IF NOT EXISTS idx_nf525_journal_created ON nf525_journal (created_at)';

@@ -75,6 +75,9 @@ if (false) {
         public function sAdd(string $key, mixed ...$members): int|false { return 0; }
         public function sRem(string $key, mixed ...$members): int { return 0; }
         public function sMembers(string $key): array { return []; }
+        public function info(?string $section = null): array { return []; }
+        public function dbSize(): int { return 0; }
+        public function flushDB(bool $async = false): bool { return true; }
         public function xAdd(string $key, string $id, array $messages, int $maxLen = 0, bool $approximate = false): string|false { return ''; }
         public function xTrim(string $key, int $maxLen, bool $approximate = false): int { return 0; }
         public function xRead(array $streams, int $count = -1, int $block = -1): array|false { return []; }

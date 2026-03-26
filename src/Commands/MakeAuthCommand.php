@@ -187,8 +187,8 @@ class MakeAuthCommand implements CommandInterface
                 . ' name VARCHAR(100) NOT NULL UNIQUE,'
                 . ' guard_name VARCHAR(50) NOT NULL DEFAULT \'web\','
                 . ' description VARCHAR(255) DEFAULT NULL,'
-                . ' created_at TIMESTAMP DEFAULT NOW(),'
-                . ' updated_at TIMESTAMP DEFAULT NOW()'
+                . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
+                . ' updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
                 . ')',
         };
     }
@@ -219,8 +219,8 @@ class MakeAuthCommand implements CommandInterface
                 . ' name VARCHAR(100) NOT NULL UNIQUE,'
                 . ' guard_name VARCHAR(50) NOT NULL DEFAULT \'web\','
                 . ' description VARCHAR(255) DEFAULT NULL,'
-                . ' created_at TIMESTAMP DEFAULT NOW(),'
-                . ' updated_at TIMESTAMP DEFAULT NOW()'
+                . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
+                . ' updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
                 . ')',
         };
     }
@@ -326,8 +326,8 @@ class MakeAuthCommand implements CommandInterface
                 . ' activated_at TIMESTAMP DEFAULT NULL,'
                 . ' reset_token VARCHAR(64) DEFAULT NULL,'
                 . ' reset_token_expires_at TIMESTAMP DEFAULT NULL,'
-                . ' created_at TIMESTAMP DEFAULT NOW(),'
-                . ' updated_at TIMESTAMP DEFAULT NOW(),'
+                . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
+                . ' updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
                 . ' deleted_at TIMESTAMP DEFAULT NULL'
                 . ')',
         };
@@ -370,8 +370,8 @@ class MakeAuthCommand implements CommandInterface
                 . ' abilities TEXT DEFAULT NULL,'
                 . ' last_used_at TIMESTAMP DEFAULT NULL,'
                 . ' expires_at TIMESTAMP DEFAULT NULL,'
-                . ' created_at TIMESTAMP DEFAULT NOW(),'
-                . ' updated_at TIMESTAMP DEFAULT NOW(),'
+                . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
+                . ' updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
                 . ' CONSTRAINT fk_pat_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE'
                 . ')',
         };

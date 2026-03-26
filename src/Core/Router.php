@@ -172,6 +172,17 @@ class Router
 
         $routesToMatch = self::$cachedRoutesStatic ?: $this->routes;
 
+        // OPTIONS preflight — run global middleware (CORS) without route matching
+        if ($method === 'OPTIONS') {
+            $pipeline = new MiddlewarePipeline($this->container);
+            foreach ($this->globalMiddleware as $gm) {
+                $pipeline->pipe($gm['class'], $gm['params']);
+            }
+            $pipeline->run(new Request($method, $uri), fn () => null);
+
+            return;
+        }
+
         foreach ($routesToMatch as $route) {
             if ($route['method'] !== $method) {
                 continue;

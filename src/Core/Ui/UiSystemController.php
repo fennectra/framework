@@ -234,10 +234,10 @@ class UiSystemController
 
             if ($driver === 'pgsql') {
                 $columns = DB::raw(
-                    "SELECT column_name, data_type, is_nullable, column_default
+                    'SELECT column_name, data_type, is_nullable, column_default
                      FROM information_schema.columns
                      WHERE table_name = ?
-                     ORDER BY ordinal_position",
+                     ORDER BY ordinal_position',
                     [$name]
                 )->fetchAll();
             } elseif ($driver === 'mysql') {

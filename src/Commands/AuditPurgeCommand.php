@@ -87,9 +87,9 @@ class AuditPurgeCommand implements CommandInterface
     private function buildInterval(string $driver, int $days): string
     {
         return match ($driver) {
-            'mysql' => "DATE_SUB(NOW(), INTERVAL {$days} DAY)",
+            'mysql' => "DATE_SUB(CURRENT_TIMESTAMP, INTERVAL {$days} DAY)",
             'sqlite' => "datetime('now', '-{$days} days')",
-            default => "NOW() - INTERVAL '{$days} days'",
+            default => "CURRENT_TIMESTAMP - INTERVAL '{$days} days'",
         };
     }
 

@@ -39,7 +39,7 @@ class PostgreSQLDriver implements DatabaseDriverInterface
             id SERIAL PRIMARY KEY,
             migration VARCHAR(255) UNIQUE NOT NULL,
             batch INT NOT NULL,
-            executed_at TIMESTAMP DEFAULT NOW()
+            executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )';
     }
 

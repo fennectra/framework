@@ -1,5 +1,8 @@
 vendor/
 var/
+app/
+database/seeders/
+tests/Integration/.skeleton_temp/
 .phpunit.cache/
 .phpunit.result.cache
 .php-cs-fixer.cache

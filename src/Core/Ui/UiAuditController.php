@@ -95,9 +95,9 @@ class UiAuditController
         try {
             $driver = Env::get('DB_DRIVER') ?: 'pgsql';
             $dateExpr = match ($driver) {
-                'mysql' => "DATE_SUB(NOW(), INTERVAL {$days} DAY)",
+                'mysql' => "DATE_SUB(CURRENT_TIMESTAMP, INTERVAL {$days} DAY)",
                 'sqlite' => "datetime('now', '-{$days} days')",
-                default => "NOW() - INTERVAL '{$days} days'",
+                default => "CURRENT_TIMESTAMP - INTERVAL '{$days} days'",
             };
 
             $count = DB::raw(

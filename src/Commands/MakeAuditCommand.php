@@ -555,7 +555,7 @@ PHP;
             . ' user_id BIGINT,'
             . ' ip_address VARCHAR(45),'
             . ' request_id VARCHAR(32),'
-            . ' created_at TIMESTAMP DEFAULT NOW()'
+            . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
             . ');'
             . ' CREATE INDEX IF NOT EXISTS idx_audit_logs_auditable ON audit_logs (auditable_type, auditable_id);'
             . ' CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs (user_id);'

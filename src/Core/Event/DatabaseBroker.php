@@ -16,7 +16,7 @@ use Fennec\Core\DB;
  *       event VARCHAR(255) NOT NULL,
  *       payload JSONB,
  *       status VARCHAR(20) DEFAULT 'pending',
- *       created_at TIMESTAMP DEFAULT NOW(),
+ *       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  *       processed_at TIMESTAMP NULL
  *   );
  *

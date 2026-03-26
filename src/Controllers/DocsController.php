@@ -252,6 +252,7 @@ HTML;
                     ],
                     'oauth2' => [
                         'type' => 'oauth2',
+                        'description' => 'Login with email and password to get a JWT token.',
                         'flows' => [
                             'password' => [
                                 'tokenUrl' => Env::get('AUTH_TOKEN_URL', '/auth/login'),

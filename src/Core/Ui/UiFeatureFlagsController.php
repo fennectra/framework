@@ -84,7 +84,7 @@ class UiFeatureFlagsController
             return;
         }
 
-        $fields[] = 'updated_at = NOW()';
+        $fields[] = 'updated_at = CURRENT_TIMESTAMP';
         $params[] = $id;
 
         try {
@@ -122,7 +122,7 @@ class UiFeatureFlagsController
             }
 
             $newState = !((bool) $flag['enabled']);
-            DB::raw('UPDATE feature_flags SET enabled = ?, updated_at = NOW() WHERE id = ?', [$newState ? 1 : 0, $id]);
+            DB::raw('UPDATE feature_flags SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [$newState ? 1 : 0, $id]);
 
             SecurityLogger::track('feature_flag.toggled', [
                 'key' => $flag['key'],

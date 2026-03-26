@@ -1,12 +1,13 @@
 {
   "generated_at": "2026-03-22",
-  "last_updated": "2026-03-22",
+  "last_updated": "2026-03-23",
   "modules": {
     "app": {
       "doc_file": "docs/app.md",
-      "last_documented": "2026-03-22",
+      "last_documented": "2026-03-23",
       "files": {
-        "fennec/Framework/Core/App.php": "2026-03-22",
+        "fennec/Framework/Core/App.php": "2026-03-23",
+        "fennec/Framework/Controllers/DocsController.php": "2026-03-23",
         "fennec/Framework/Commands/ServeCommand.php": "2026-03-21",
         "fennec/Framework/Commands/CacheRoutesCommand.php": "2026-03-21"
       }
@@ -102,7 +103,7 @@
     },
     "middleware": {
       "doc_file": "docs/middleware.md",
-      "last_documented": "2026-03-22",
+      "last_documented": "2026-03-23",
       "files": {
         "fennec/Framework/Core/MiddlewareInterface.php": "2026-03-21",
         "fennec/Framework/Core/MiddlewarePipeline.php": "2026-03-21",
@@ -110,19 +111,25 @@
         "fennec/Framework/Middleware/CorsMiddleware.php": "2026-03-22",
         "fennec/Framework/Middleware/RateLimitMiddleware.php": "2026-03-22",
         "fennec/Framework/Middleware/IpAllowlistMiddleware.php": "2026-03-22",
-        "app/Middleware/Auth.php": "2026-03-21"
+        "app/Middleware/Auth.php": "2026-03-23"
       }
     },
     "authentication": {
       "doc_file": "docs/authentication.md",
-      "last_documented": "2026-03-22",
+      "last_documented": "2026-03-23",
       "files": {
         "fennec/Framework/Core/JwtService.php": "2026-03-22",
         "fennec/Framework/Middleware/AuthMiddleware.php": "2026-03-22",
         "fennec/Framework/Core/Security/PasswordPolicy.php": "2026-03-22",
         "fennec/Framework/Core/Security/AccountLockout.php": "2026-03-22",
         "fennec/Framework/Core/Security/SecurityLogger.php": "2026-03-22",
-        "app/Middleware/Auth.php": "2026-03-21"
+        "fennec/Framework/Commands/MakeAuthCommand.php": "2026-03-23",
+        "app/Middleware/Auth.php": "2026-03-23",
+        "app/Models/User.php": "2026-03-23",
+        "app/Models/Role.php": "2026-03-23",
+        "app/Models/Permission.php": "2026-03-23",
+        "app/Models/PersonalAccessToken.php": "2026-03-23",
+        "database/seeders/AuthSeeder.php": "2026-03-23"
       }
     },
     "events": {
@@ -352,11 +359,13 @@
     },
     "cli": {
       "doc_file": "docs/cli.md",
-      "last_documented": "2026-03-22",
+      "last_documented": "2026-03-23",
       "files": {
         "fennec/bin/cli": "2026-03-21",
         "fennec/Framework/Core/Cli/CommandInterface.php": "2026-03-21",
-        "fennec/Framework/Core/Cli/CommandRunner.php": "2026-03-21",
+        "fennec/Framework/Core/Cli/CommandRunner.php": "2026-03-23",
+        "fennec/Framework/Commands/QualityCommand.php": "2026-03-23",
+        "fennec/Framework/Commands/TestIntegrationCommand.php": "2026-03-23",
         "fennec/Framework/Attributes/Command.php": "2026-03-21"
       }
     },
@@ -372,22 +381,33 @@
     },
     "webhook": {
       "doc_file": "docs/webhook.md",
-      "last_documented": "2026-03-22",
+      "last_documented": "2026-03-23",
       "files": {
         "fennec/Framework/Core/Webhook/WebhookManager.php": "2026-03-22",
         "fennec/Framework/Core/Webhook/WebhookDeliveryJob.php": "2026-03-22",
         "fennec/Framework/Core/Notification/Channels/WebhookChannel.php": "2026-03-22",
         "fennec/Framework/Commands/MakeWebhookCommand.php": "2026-03-22",
         "fennec/database/migrations/2026_03_22_012911_create_webhooks_tables.php": "2026-03-22",
-        "app/Controllers/WebhookController.php": "2026-03-22",
-        "app/Models/Webhook.php": "2026-03-22",
-        "app/Models/WebhookDelivery.php": "2026-03-22",
-        "app/Dto/WebhookStoreRequest.php": "2026-03-22",
-        "app/Dto/WebhookItem.php": "2026-03-22",
-        "app/Dto/WebhookDeliveryItem.php": "2026-03-22",
-        "app/Dto/WebhookResponse.php": "2026-03-22",
-        "app/Dto/WebhookListRequest.php": "2026-03-22",
-        "app/Routes/webhook.php": "2026-03-22"
+        "app/Controllers/WebhookController.php": "2026-03-23",
+        "app/Models/Webhook.php": "2026-03-23",
+        "app/Models/WebhookDelivery.php": "2026-03-23",
+        "app/Dto/WebhookStoreRequest.php": "2026-03-23",
+        "app/Dto/WebhookItem.php": "2026-03-23",
+        "app/Dto/WebhookDeliveryItem.php": "2026-03-23",
+        "app/Dto/WebhookResponse.php": "2026-03-23",
+        "app/Dto/WebhookListRequest.php": "2026-03-23",
+        "app/Routes/webhook.php": "2026-03-23"
+      }
+    },
+    "architecture": {
+      "doc_file": "docs/architecture.md",
+      "last_documented": "2026-03-23",
+      "files": {
+        "fennec/Framework/Core/App.php": "2026-03-23",
+        "fennec/docker/Dockerfile.frankenphp": "2026-03-23",
+        "fennec/docker/Dockerfile.fpm": "2026-03-23",
+        "fennec/docker/Caddyfile": "2026-03-23",
+        "fennec/docker/nginx.conf": "2026-03-23"
       }
     }
   }

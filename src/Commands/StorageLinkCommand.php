@@ -19,10 +19,15 @@ class StorageLinkCommand implements CommandInterface
             echo "  \033[32m✓\033[0m Dossier storage/ créé\n";
         }
 
-        if (file_exists($link) || is_link($link)) {
-            echo "  \033[33m⚠\033[0m Le lien public/storage existe déjà\n";
+        if (is_link($link)) {
+            echo "  \033[33m⚠\033[0m Symlink public/storage already exists\n";
 
             return 0;
+        }
+
+        // Remove empty directory if it exists (created by mistake)
+        if (is_dir($link)) {
+            @rmdir($link);
         }
 
         // Sous Windows, symlink nécessite les droits admin

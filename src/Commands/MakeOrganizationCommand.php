@@ -1005,8 +1005,8 @@ PHP;
                 . ' owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,'
                 . ' logo VARCHAR(500) DEFAULT NULL,'
                 . ' description TEXT DEFAULT NULL,'
-                . ' created_at TIMESTAMP DEFAULT NOW(),'
-                . ' updated_at TIMESTAMP DEFAULT NOW()'
+                . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
+                . ' updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
                 . ')',
 
             'organization_members' => 'CREATE TABLE IF NOT EXISTS organization_members ('
@@ -1026,7 +1026,7 @@ PHP;
                 . ' role VARCHAR(20) NOT NULL DEFAULT \'member\','
                 . ' token VARCHAR(64) NOT NULL UNIQUE,'
                 . ' expires_at TIMESTAMP NOT NULL,'
-                . ' created_at TIMESTAMP DEFAULT NOW()'
+                . ' created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
                 . ')',
         };
     }

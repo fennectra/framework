@@ -1,6 +1,0 @@
-<?php
-
-return [
-    'up' => 'CREATE TABLE IF NOT EXISTS consent_objects ( id INTEGER PRIMARY KEY AUTOINCREMENT, object_name TEXT NOT NULL, object_content TEXT NOT NULL, object_version INTEGER NOT NULL DEFAULT 1, object_previous_version INTEGER DEFAULT NULL REFERENCES consent_objects(id), key TEXT DEFAULT NULL, is_required INTEGER DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS idx_consent_objects_key ON consent_objects (key); CREATE INDEX IF NOT EXISTS idx_consent_objects_version ON consent_objects (key, object_version); CREATE TABLE IF NOT EXISTS user_consents ( id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, consent_object_id INTEGER NOT NULL REFERENCES consent_objects(id) ON DELETE CASCADE, consent_status INTEGER NOT NULL DEFAULT 0, consent_way TEXT NOT NULL DEFAULT \'web\', object_version INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE UNIQUE INDEX IF NOT EXISTS idx_user_consents_unique ON user_consents (user_id, consent_object_id)',
-    'down' => 'DROP TABLE IF EXISTS user_consents; DROP TABLE IF EXISTS consent_objects',
-];
