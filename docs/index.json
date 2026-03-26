@@ -1,414 +1,423 @@
 {
-  "generated_at": "2026-03-22",
-  "last_updated": "2026-03-23",
-  "modules": {
-    "app": {
-      "doc_file": "docs/app.md",
-      "last_documented": "2026-03-23",
-      "files": {
-        "fennec/Framework/Core/App.php": "2026-03-23",
-        "fennec/Framework/Controllers/DocsController.php": "2026-03-23",
-        "fennec/Framework/Commands/ServeCommand.php": "2026-03-21",
-        "fennec/Framework/Commands/CacheRoutesCommand.php": "2026-03-21"
-      }
-    },
-    "router": {
-      "doc_file": "docs/router.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Router.php": "2026-03-22",
-        "fennec/Framework/Core/MiddlewarePipeline.php": "2026-03-21",
-        "fennec/Framework/Attributes/Before.php": "2026-03-21",
-        "fennec/Framework/Attributes/After.php": "2026-03-21"
-      }
-    },
-    "container": {
-      "doc_file": "docs/container.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Container.php": "2026-03-21",
-        "fennec/Framework/Core/ContainerException.php": "2026-03-21"
-      }
-    },
-    "http": {
-      "doc_file": "docs/http.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Request.php": "2026-03-21",
-        "fennec/Framework/Core/Response.php": "2026-03-21"
-      }
-    },
-    "error-handling": {
-      "doc_file": "docs/error-handling.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/ErrorHandler.php": "2026-03-21",
-        "fennec/Framework/Core/HttpException.php": "2026-03-21"
-      }
-    },
-    "database": {
-      "doc_file": "docs/database.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/DB.php": "2026-03-21",
-        "fennec/Framework/Core/Database.php": "2026-03-22",
-        "fennec/Framework/Core/DatabaseManager.php": "2026-03-21",
-        "fennec/Framework/Core/QueryBuilder.php": "2026-03-21",
-        "fennec/Framework/Core/Database/DatabaseDriverInterface.php": "2026-03-21",
-        "fennec/Framework/Core/Database/PostgreSQLDriver.php": "2026-03-21",
-        "fennec/Framework/Core/Database/MySQLDriver.php": "2026-03-21",
-        "fennec/Framework/Core/Database/SQLiteDriver.php": "2026-03-21",
-        "fennec/Framework/Core/Database/DriverFactory.php": "2026-03-21",
-        "fennec/Framework/Commands/MigrateCommand.php": "2026-03-21",
-        "fennec/Framework/Commands/MakeMigrationCommand.php": "2026-03-21",
-        "fennec/Framework/Commands/TinkerCommand.php": "2026-03-22"
-      }
-    },
-    "model-orm": {
-      "doc_file": "docs/model-orm.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Model.php": "2026-03-21",
-        "fennec/Framework/Core/ModelQueryBuilder.php": "2026-03-21",
-        "fennec/Framework/Core/Relations/Relation.php": "2026-03-21",
-        "fennec/Framework/Core/Relations/BelongsTo.php": "2026-03-21",
-        "fennec/Framework/Core/Relations/HasMany.php": "2026-03-21",
-        "fennec/Framework/Core/Relations/HasOne.php": "2026-03-21",
-        "fennec/Framework/Attributes/Table.php": "2026-03-21",
-        "fennec/Framework/Commands/MakeModelCommand.php": "2026-03-21"
-      }
-    },
-    "collection": {
-      "doc_file": "docs/collection.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Collection.php": "2026-03-21"
-      }
-    },
-    "validation": {
-      "doc_file": "docs/validation.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Validator.php": "2026-03-21",
-        "fennec/Framework/Attributes/Required.php": "2026-03-21",
-        "fennec/Framework/Attributes/Email.php": "2026-03-21",
-        "fennec/Framework/Attributes/Min.php": "2026-03-21",
-        "fennec/Framework/Attributes/Max.php": "2026-03-21",
-        "fennec/Framework/Attributes/MinLength.php": "2026-03-21",
-        "fennec/Framework/Attributes/MaxLength.php": "2026-03-21",
-        "fennec/Framework/Attributes/Regex.php": "2026-03-21",
-        "fennec/Framework/Attributes/Description.php": "2026-03-21",
-        "fennec/Framework/Attributes/ArrayOf.php": "2026-03-21"
-      }
-    },
-    "middleware": {
-      "doc_file": "docs/middleware.md",
-      "last_documented": "2026-03-23",
-      "files": {
-        "fennec/Framework/Core/MiddlewareInterface.php": "2026-03-21",
-        "fennec/Framework/Core/MiddlewarePipeline.php": "2026-03-21",
-        "fennec/Framework/Middleware/AuthMiddleware.php": "2026-03-22",
-        "fennec/Framework/Middleware/CorsMiddleware.php": "2026-03-22",
-        "fennec/Framework/Middleware/RateLimitMiddleware.php": "2026-03-22",
-        "fennec/Framework/Middleware/IpAllowlistMiddleware.php": "2026-03-22",
-        "app/Middleware/Auth.php": "2026-03-23"
-      }
-    },
-    "authentication": {
-      "doc_file": "docs/authentication.md",
-      "last_documented": "2026-03-23",
-      "files": {
-        "fennec/Framework/Core/JwtService.php": "2026-03-22",
-        "fennec/Framework/Middleware/AuthMiddleware.php": "2026-03-22",
-        "fennec/Framework/Core/Security/PasswordPolicy.php": "2026-03-22",
-        "fennec/Framework/Core/Security/AccountLockout.php": "2026-03-22",
-        "fennec/Framework/Core/Security/SecurityLogger.php": "2026-03-22",
-        "fennec/Framework/Commands/MakeAuthCommand.php": "2026-03-23",
-        "app/Middleware/Auth.php": "2026-03-23",
-        "app/Models/User.php": "2026-03-23",
-        "app/Models/Role.php": "2026-03-23",
-        "app/Models/Permission.php": "2026-03-23",
-        "app/Models/PersonalAccessToken.php": "2026-03-23",
-        "database/seeders/AuthSeeder.php": "2026-03-23"
-      }
-    },
-    "events": {
-      "doc_file": "docs/events.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Event.php": "2026-03-21",
-        "fennec/Framework/Core/EventDispatcher.php": "2026-03-22",
-        "fennec/Framework/Core/EventHandlerInterface.php": "2026-03-21",
-        "fennec/Framework/Core/Event/EventBrokerInterface.php": "2026-03-21",
-        "fennec/Framework/Core/Event/SyncBroker.php": "2026-03-21",
-        "fennec/Framework/Core/Event/RedisBroker.php": "2026-03-21",
-        "fennec/Framework/Core/Event/DatabaseBroker.php": "2026-03-21",
-        "fennec/Framework/Attributes/Listener.php": "2026-03-21",
-        "fennec/Framework/Commands/MakeEventCommand.php": "2026-03-21",
-        "fennec/Framework/Commands/MakeListenerCommand.php": "2026-03-21"
-      }
-    },
-    "cache": {
-      "doc_file": "docs/cache.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Cache/CacheInterface.php": "2026-03-21",
-        "fennec/Framework/Core/Cache/FileCache.php": "2026-03-21",
-        "fennec/Framework/Core/Cache/RedisCache.php": "2026-03-21",
-        "fennec/Framework/Core/Cache/TaggedCache.php": "2026-03-22",
-        "fennec/Framework/Core/Cache/RouteCache.php": "2026-03-21",
-        "fennec/Framework/Core/Cache/AttributeCache.php": "2026-03-22",
-        "fennec/Framework/Commands/CacheRoutesCommand.php": "2026-03-21",
-        "fennec/Framework/Commands/CacheClearCommand.php": "2026-03-21"
-      }
-    },
-    "queue": {
-      "doc_file": "docs/queue.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Queue/Job.php": "2026-03-22",
-        "fennec/Framework/Core/Queue/JobInterface.php": "2026-03-21",
-        "fennec/Framework/Core/Queue/QueueWorker.php": "2026-03-21",
-        "fennec/Framework/Core/Queue/FailedJobHandler.php": "2026-03-21",
-        "fennec/Framework/Commands/QueueWorkCommand.php": "2026-03-21",
-        "fennec/Framework/Commands/QueueRetryCommand.php": "2026-03-21",
-        "fennec/Framework/Commands/MakeJobCommand.php": "2026-03-21"
-      }
-    },
-    "storage": {
-      "doc_file": "docs/storage.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Storage.php": "2026-03-21",
-        "fennec/Framework/Core/Storage/StorageDriverInterface.php": "2026-03-21",
-        "fennec/Framework/Core/Storage/LocalDriver.php": "2026-03-21",
-        "fennec/Framework/Core/Storage/S3Driver.php": "2026-03-21",
-        "fennec/Framework/Core/Storage/GcsDriver.php": "2026-03-21",
-        "fennec/Framework/Attributes/FileUpload.php": "2026-03-21",
-        "fennec/Framework/Commands/StorageLinkCommand.php": "2026-03-21"
-      }
-    },
-    "notifications": {
-      "doc_file": "docs/notifications.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Notification/NotificationInterface.php": "2026-03-22",
-        "fennec/Framework/Core/Notification/Notification.php": "2026-03-22",
-        "fennec/Framework/Core/Notification/NotificationSender.php": "2026-03-22",
-        "fennec/Framework/Core/Notification/HasNotifications.php": "2026-03-21",
-        "fennec/Framework/Core/Notification/Channels/DatabaseChannel.php": "2026-03-21",
-        "fennec/Framework/Core/Notification/Channels/MailChannel.php": "2026-03-22",
-        "fennec/Framework/Core/Notification/Channels/SlackChannel.php": "2026-03-21",
-        "fennec/Framework/Core/Notification/Channels/WebhookChannel.php": "2026-03-22",
-        "fennec/Framework/Core/Notification/Messages/MailMessage.php": "2026-03-21",
-        "fennec/Framework/Core/Notification/Messages/SlackMessage.php": "2026-03-21",
-        "fennec/Framework/Core/Notification/Messages/WebhookMessage.php": "2026-03-22"
-      }
-    },
-    "broadcasting": {
-      "doc_file": "docs/broadcasting.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Broadcasting/Broadcaster.php": "2026-03-22",
-        "fennec/Framework/Core/Broadcasting/SseController.php": "2026-03-22"
-      }
-    },
-    "audit-trail": {
-      "doc_file": "docs/audit-trail.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Audit/HasAuditTrail.php": "2026-03-22",
-        "fennec/Framework/Attributes/Auditable.php": "2026-03-22",
-        "fennec/Framework/Commands/MakeAuditCommand.php": "2026-03-22",
-        "fennec/Framework/Commands/AuditPurgeCommand.php": "2026-03-22"
-      }
-    },
-    "nf525": {
-      "doc_file": "docs/nf525.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Nf525/HasNf525.php": "2026-03-22",
-        "fennec/Framework/Core/Nf525/ClosingService.php": "2026-03-22",
-        "fennec/Framework/Core/Nf525/FecExporter.php": "2026-03-22",
-        "fennec/Framework/Core/Nf525/HashChainVerifier.php": "2026-03-22",
-        "fennec/Framework/Attributes/Nf525.php": "2026-03-22",
-        "fennec/Framework/Commands/MakeNf525Command.php": "2026-03-22",
-        "fennec/Framework/Commands/Nf525CloseCommand.php": "2026-03-22",
-        "fennec/Framework/Commands/Nf525ExportCommand.php": "2026-03-22",
-        "fennec/Framework/Commands/Nf525VerifyCommand.php": "2026-03-22"
-      }
-    },
-    "encryption": {
-      "doc_file": "docs/encryption.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Encryption/Encrypter.php": "2026-03-22",
-        "fennec/Framework/Core/Encryption/HasEncryptedFields.php": "2026-03-22",
-        "fennec/Framework/Attributes/Encrypted.php": "2026-03-22"
-      }
-    },
-    "state-machine": {
-      "doc_file": "docs/state-machine.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Attributes/StateMachine.php": "2026-03-21",
-        "fennec/Framework/Core/StateMachine/HasStateMachine.php": "2026-03-21",
-        "fennec/Framework/Core/StateMachine/StateMachineEngine.php": "2026-03-22"
-      }
-    },
-    "feature-flags": {
-      "doc_file": "docs/feature-flags.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Feature/FeatureFlag.php": "2026-03-22",
-        "fennec/Framework/Core/Feature/FeatureFlagBuilder.php": "2026-03-21",
-        "fennec/Framework/Commands/FeatureFlagCommand.php": "2026-03-21"
-      }
-    },
-    "rate-limiter": {
-      "doc_file": "docs/rate-limiter.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/RateLimiter.php": "2026-03-21",
-        "fennec/Framework/Core/RateLimiter/RateLimiterStoreInterface.php": "2026-03-21",
-        "fennec/Framework/Core/RateLimiter/InMemoryStore.php": "2026-03-22",
-        "fennec/Framework/Core/RateLimiter/RedisStore.php": "2026-03-22",
-        "fennec/Framework/Middleware/RateLimitMiddleware.php": "2026-03-22",
-        "fennec/Framework/Attributes/RateLimit.php": "2026-03-21"
-      }
-    },
-    "profiler": {
-      "doc_file": "docs/profiler.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Profiler/Profiler.php": "2026-03-21",
-        "fennec/Framework/Core/Profiler/ProfileEntry.php": "2026-03-21",
-        "fennec/Framework/Core/Profiler/ProfilerStorageInterface.php": "2026-03-21",
-        "fennec/Framework/Core/Profiler/InMemoryStorage.php": "2026-03-22",
-        "fennec/Framework/Middleware/ProfilerMiddleware.php": "2026-03-21"
-      }
-    },
-    "scheduler": {
-      "doc_file": "docs/scheduler.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Scheduler/Schedule.php": "2026-03-21",
-        "fennec/Framework/Core/Scheduler/ScheduledTask.php": "2026-03-21",
-        "fennec/Framework/Core/Scheduler/CronExpression.php": "2026-03-21",
-        "fennec/Framework/Core/Scheduler/Scheduler.php": "2026-03-21",
-        "fennec/Framework/Commands/ScheduleRunCommand.php": "2026-03-21",
-        "app/Schedule.php": "2026-03-21"
-      }
-    },
-    "security": {
-      "doc_file": "docs/security.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Security/PasswordPolicy.php": "2026-03-22",
-        "fennec/Framework/Core/Security/AccountLockout.php": "2026-03-22",
-        "fennec/Framework/Core/Security/SecurityLogger.php": "2026-03-22",
-        "fennec/Framework/Middleware/IpAllowlistMiddleware.php": "2026-03-22"
-      }
-    },
-    "logging": {
-      "doc_file": "docs/logging.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Logger.php": "2026-03-22",
-        "fennec/Framework/Core/Logging/LogMaskingProcessor.php": "2026-03-22",
-        "fennec/Framework/Core/Security/SecurityLogger.php": "2026-03-22"
-      }
-    },
-    "image": {
-      "doc_file": "docs/image.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Image/ImageTransformer.php": "2026-03-22",
-        "fennec/Framework/Core/Image/ImageTransformPipeline.php": "2026-03-22",
-        "fennec/Framework/Attributes/ImageTransform.php": "2026-03-22"
-      }
-    },
-    "oauth": {
-      "doc_file": "docs/oauth.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/OAuth/OAuthManager.php": "2026-03-21",
-        "fennec/Framework/Core/OAuth/OAuthProvider.php": "2026-03-21",
-        "fennec/Framework/Core/OAuth/OAuthToken.php": "2026-03-21",
-        "fennec/Framework/Core/OAuth/OAuthUser.php": "2026-03-21",
-        "fennec/Framework/Core/OAuth/Providers/GoogleProvider.php": "2026-03-21",
-        "fennec/Framework/Core/OAuth/Providers/GitHubProvider.php": "2026-03-21"
-      }
-    },
-    "redis": {
-      "doc_file": "docs/redis.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Redis/RedisConnection.php": "2026-03-21",
-        "fennec/Framework/Core/Redis/RedisLock.php": "2026-03-22"
-      }
-    },
-    "tenant": {
-      "doc_file": "docs/tenant.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/TenantManager.php": "2026-03-21",
-        "fennec/Framework/Middleware/TenantMiddleware.php": "2026-03-21",
-        "fennec/Framework/Commands/MakeTenantCommand.php": "2026-03-22"
-      }
-    },
-    "cli": {
-      "doc_file": "docs/cli.md",
-      "last_documented": "2026-03-23",
-      "files": {
-        "fennec/bin/cli": "2026-03-21",
-        "fennec/Framework/Core/Cli/CommandInterface.php": "2026-03-21",
-        "fennec/Framework/Core/Cli/CommandRunner.php": "2026-03-23",
-        "fennec/Framework/Commands/QualityCommand.php": "2026-03-23",
-        "fennec/Framework/Commands/TestIntegrationCommand.php": "2026-03-23",
-        "fennec/Framework/Attributes/Command.php": "2026-03-21"
-      }
-    },
-    "ui-dashboard": {
-      "doc_file": "docs/ui-dashboard.md",
-      "last_documented": "2026-03-22",
-      "files": {
-        "fennec/Framework/Core/Ui/UiController.php": "2026-03-22",
-        "fennec/Framework/Core/Ui/UiRoutes.php": "2026-03-22",
-        "fennec/Framework/Middleware/UiAuthMiddleware.php": "2026-03-22",
-        "fennec/Framework/Commands/UiCommand.php": "2026-03-22"
-      }
-    },
-    "webhook": {
-      "doc_file": "docs/webhook.md",
-      "last_documented": "2026-03-23",
-      "files": {
-        "fennec/Framework/Core/Webhook/WebhookManager.php": "2026-03-22",
-        "fennec/Framework/Core/Webhook/WebhookDeliveryJob.php": "2026-03-22",
-        "fennec/Framework/Core/Notification/Channels/WebhookChannel.php": "2026-03-22",
-        "fennec/Framework/Commands/MakeWebhookCommand.php": "2026-03-22",
-        "fennec/database/migrations/2026_03_22_012911_create_webhooks_tables.php": "2026-03-22",
-        "app/Controllers/WebhookController.php": "2026-03-23",
-        "app/Models/Webhook.php": "2026-03-23",
-        "app/Models/WebhookDelivery.php": "2026-03-23",
-        "app/Dto/WebhookStoreRequest.php": "2026-03-23",
-        "app/Dto/WebhookItem.php": "2026-03-23",
-        "app/Dto/WebhookDeliveryItem.php": "2026-03-23",
-        "app/Dto/WebhookResponse.php": "2026-03-23",
-        "app/Dto/WebhookListRequest.php": "2026-03-23",
-        "app/Routes/webhook.php": "2026-03-23"
-      }
-    },
-    "architecture": {
-      "doc_file": "docs/architecture.md",
-      "last_documented": "2026-03-23",
-      "files": {
-        "fennec/Framework/Core/App.php": "2026-03-23",
-        "fennec/docker/Dockerfile.frankenphp": "2026-03-23",
-        "fennec/docker/Dockerfile.fpm": "2026-03-23",
-        "fennec/docker/Caddyfile": "2026-03-23",
-        "fennec/docker/nginx.conf": "2026-03-23"
-      }
+    "generated_at": "2026-03-22",
+    "last_updated": "2026-03-26",
+    "modules": {
+        "app": {
+            "doc_file": "docs/app.md",
+            "last_documented": "2026-03-23",
+            "files": {
+                "fennec/Framework/Core/App.php": "2026-03-23",
+                "fennec/Framework/Controllers/DocsController.php": "2026-03-23",
+                "fennec/Framework/Commands/ServeCommand.php": "2026-03-21",
+                "fennec/Framework/Commands/CacheRoutesCommand.php": "2026-03-21"
+            }
+        },
+        "router": {
+            "doc_file": "docs/router.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Router.php": "2026-03-22",
+                "fennec/Framework/Core/MiddlewarePipeline.php": "2026-03-21",
+                "fennec/Framework/Attributes/Before.php": "2026-03-21",
+                "fennec/Framework/Attributes/After.php": "2026-03-21"
+            }
+        },
+        "container": {
+            "doc_file": "docs/container.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Container.php": "2026-03-21",
+                "fennec/Framework/Core/ContainerException.php": "2026-03-21"
+            }
+        },
+        "http": {
+            "doc_file": "docs/http.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Request.php": "2026-03-21",
+                "fennec/Framework/Core/Response.php": "2026-03-21"
+            }
+        },
+        "error-handling": {
+            "doc_file": "docs/error-handling.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/ErrorHandler.php": "2026-03-21",
+                "fennec/Framework/Core/HttpException.php": "2026-03-21"
+            }
+        },
+        "database": {
+            "doc_file": "docs/database.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/DB.php": "2026-03-21",
+                "fennec/Framework/Core/Database.php": "2026-03-22",
+                "fennec/Framework/Core/DatabaseManager.php": "2026-03-21",
+                "fennec/Framework/Core/QueryBuilder.php": "2026-03-21",
+                "fennec/Framework/Core/Database/DatabaseDriverInterface.php": "2026-03-21",
+                "fennec/Framework/Core/Database/PostgreSQLDriver.php": "2026-03-21",
+                "fennec/Framework/Core/Database/MySQLDriver.php": "2026-03-21",
+                "fennec/Framework/Core/Database/SQLiteDriver.php": "2026-03-21",
+                "fennec/Framework/Core/Database/DriverFactory.php": "2026-03-21",
+                "fennec/Framework/Commands/MigrateCommand.php": "2026-03-21",
+                "fennec/Framework/Commands/MakeMigrationCommand.php": "2026-03-21",
+                "fennec/Framework/Commands/TinkerCommand.php": "2026-03-22"
+            }
+        },
+        "model-orm": {
+            "doc_file": "docs/model-orm.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Model.php": "2026-03-21",
+                "fennec/Framework/Core/ModelQueryBuilder.php": "2026-03-21",
+                "fennec/Framework/Core/Relations/Relation.php": "2026-03-21",
+                "fennec/Framework/Core/Relations/BelongsTo.php": "2026-03-21",
+                "fennec/Framework/Core/Relations/HasMany.php": "2026-03-21",
+                "fennec/Framework/Core/Relations/HasOne.php": "2026-03-21",
+                "fennec/Framework/Attributes/Table.php": "2026-03-21",
+                "fennec/Framework/Commands/MakeModelCommand.php": "2026-03-21"
+            }
+        },
+        "collection": {
+            "doc_file": "docs/collection.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Collection.php": "2026-03-21"
+            }
+        },
+        "validation": {
+            "doc_file": "docs/validation.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Validator.php": "2026-03-21",
+                "fennec/Framework/Attributes/Required.php": "2026-03-21",
+                "fennec/Framework/Attributes/Email.php": "2026-03-21",
+                "fennec/Framework/Attributes/Min.php": "2026-03-21",
+                "fennec/Framework/Attributes/Max.php": "2026-03-21",
+                "fennec/Framework/Attributes/MinLength.php": "2026-03-21",
+                "fennec/Framework/Attributes/MaxLength.php": "2026-03-21",
+                "fennec/Framework/Attributes/Regex.php": "2026-03-21",
+                "fennec/Framework/Attributes/Description.php": "2026-03-21",
+                "fennec/Framework/Attributes/ArrayOf.php": "2026-03-21"
+            }
+        },
+        "middleware": {
+            "doc_file": "docs/middleware.md",
+            "last_documented": "2026-03-23",
+            "files": {
+                "fennec/Framework/Core/MiddlewareInterface.php": "2026-03-21",
+                "fennec/Framework/Core/MiddlewarePipeline.php": "2026-03-21",
+                "fennec/Framework/Middleware/AuthMiddleware.php": "2026-03-22",
+                "fennec/Framework/Middleware/CorsMiddleware.php": "2026-03-22",
+                "fennec/Framework/Middleware/RateLimitMiddleware.php": "2026-03-22",
+                "fennec/Framework/Middleware/IpAllowlistMiddleware.php": "2026-03-22",
+                "app/Middleware/Auth.php": "2026-03-23"
+            }
+        },
+        "authentication": {
+            "doc_file": "docs/authentication.md",
+            "last_documented": "2026-03-23",
+            "files": {
+                "fennec/Framework/Core/JwtService.php": "2026-03-22",
+                "fennec/Framework/Middleware/AuthMiddleware.php": "2026-03-22",
+                "fennec/Framework/Core/Security/PasswordPolicy.php": "2026-03-22",
+                "fennec/Framework/Core/Security/AccountLockout.php": "2026-03-22",
+                "fennec/Framework/Core/Security/SecurityLogger.php": "2026-03-22",
+                "fennec/Framework/Commands/MakeAuthCommand.php": "2026-03-23",
+                "app/Middleware/Auth.php": "2026-03-23",
+                "app/Models/User.php": "2026-03-23",
+                "app/Models/Role.php": "2026-03-23",
+                "app/Models/Permission.php": "2026-03-23",
+                "app/Models/PersonalAccessToken.php": "2026-03-23",
+                "database/seeders/AuthSeeder.php": "2026-03-23"
+            }
+        },
+        "events": {
+            "doc_file": "docs/events.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Event.php": "2026-03-21",
+                "fennec/Framework/Core/EventDispatcher.php": "2026-03-22",
+                "fennec/Framework/Core/EventHandlerInterface.php": "2026-03-21",
+                "fennec/Framework/Core/Event/EventBrokerInterface.php": "2026-03-21",
+                "fennec/Framework/Core/Event/SyncBroker.php": "2026-03-21",
+                "fennec/Framework/Core/Event/RedisBroker.php": "2026-03-21",
+                "fennec/Framework/Core/Event/DatabaseBroker.php": "2026-03-21",
+                "fennec/Framework/Attributes/Listener.php": "2026-03-21",
+                "fennec/Framework/Commands/MakeEventCommand.php": "2026-03-21",
+                "fennec/Framework/Commands/MakeListenerCommand.php": "2026-03-21"
+            }
+        },
+        "cache": {
+            "doc_file": "docs/cache.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Cache/CacheInterface.php": "2026-03-21",
+                "fennec/Framework/Core/Cache/FileCache.php": "2026-03-21",
+                "fennec/Framework/Core/Cache/RedisCache.php": "2026-03-21",
+                "fennec/Framework/Core/Cache/TaggedCache.php": "2026-03-22",
+                "fennec/Framework/Core/Cache/RouteCache.php": "2026-03-21",
+                "fennec/Framework/Core/Cache/AttributeCache.php": "2026-03-22",
+                "fennec/Framework/Commands/CacheRoutesCommand.php": "2026-03-21",
+                "fennec/Framework/Commands/CacheClearCommand.php": "2026-03-21"
+            }
+        },
+        "queue": {
+            "doc_file": "docs/queue.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Queue/Job.php": "2026-03-22",
+                "fennec/Framework/Core/Queue/JobInterface.php": "2026-03-21",
+                "fennec/Framework/Core/Queue/QueueWorker.php": "2026-03-21",
+                "fennec/Framework/Core/Queue/FailedJobHandler.php": "2026-03-21",
+                "fennec/Framework/Commands/QueueWorkCommand.php": "2026-03-21",
+                "fennec/Framework/Commands/QueueRetryCommand.php": "2026-03-21",
+                "fennec/Framework/Commands/MakeJobCommand.php": "2026-03-21"
+            }
+        },
+        "storage": {
+            "doc_file": "docs/storage.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Storage.php": "2026-03-21",
+                "fennec/Framework/Core/Storage/StorageDriverInterface.php": "2026-03-21",
+                "fennec/Framework/Core/Storage/LocalDriver.php": "2026-03-21",
+                "fennec/Framework/Core/Storage/S3Driver.php": "2026-03-21",
+                "fennec/Framework/Core/Storage/GcsDriver.php": "2026-03-21",
+                "fennec/Framework/Attributes/FileUpload.php": "2026-03-21",
+                "fennec/Framework/Commands/StorageLinkCommand.php": "2026-03-21"
+            }
+        },
+        "notifications": {
+            "doc_file": "docs/notifications.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Notification/NotificationInterface.php": "2026-03-22",
+                "fennec/Framework/Core/Notification/Notification.php": "2026-03-22",
+                "fennec/Framework/Core/Notification/NotificationSender.php": "2026-03-22",
+                "fennec/Framework/Core/Notification/HasNotifications.php": "2026-03-21",
+                "fennec/Framework/Core/Notification/Channels/DatabaseChannel.php": "2026-03-21",
+                "fennec/Framework/Core/Notification/Channels/MailChannel.php": "2026-03-22",
+                "fennec/Framework/Core/Notification/Channels/SlackChannel.php": "2026-03-21",
+                "fennec/Framework/Core/Notification/Channels/WebhookChannel.php": "2026-03-22",
+                "fennec/Framework/Core/Notification/Messages/MailMessage.php": "2026-03-21",
+                "fennec/Framework/Core/Notification/Messages/SlackMessage.php": "2026-03-21",
+                "fennec/Framework/Core/Notification/Messages/WebhookMessage.php": "2026-03-22"
+            }
+        },
+        "broadcasting": {
+            "doc_file": "docs/broadcasting.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Broadcasting/Broadcaster.php": "2026-03-22",
+                "fennec/Framework/Core/Broadcasting/SseController.php": "2026-03-22"
+            }
+        },
+        "audit-trail": {
+            "doc_file": "docs/audit-trail.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Audit/HasAuditTrail.php": "2026-03-22",
+                "fennec/Framework/Attributes/Auditable.php": "2026-03-22",
+                "fennec/Framework/Commands/MakeAuditCommand.php": "2026-03-22",
+                "fennec/Framework/Commands/AuditPurgeCommand.php": "2026-03-22"
+            }
+        },
+        "nf525": {
+            "doc_file": "docs/nf525.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Nf525/HasNf525.php": "2026-03-22",
+                "fennec/Framework/Core/Nf525/ClosingService.php": "2026-03-22",
+                "fennec/Framework/Core/Nf525/FecExporter.php": "2026-03-22",
+                "fennec/Framework/Core/Nf525/HashChainVerifier.php": "2026-03-22",
+                "fennec/Framework/Attributes/Nf525.php": "2026-03-22",
+                "fennec/Framework/Commands/MakeNf525Command.php": "2026-03-22",
+                "fennec/Framework/Commands/Nf525CloseCommand.php": "2026-03-22",
+                "fennec/Framework/Commands/Nf525ExportCommand.php": "2026-03-22",
+                "fennec/Framework/Commands/Nf525VerifyCommand.php": "2026-03-22"
+            }
+        },
+        "encryption": {
+            "doc_file": "docs/encryption.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Encryption/Encrypter.php": "2026-03-22",
+                "fennec/Framework/Core/Encryption/HasEncryptedFields.php": "2026-03-22",
+                "fennec/Framework/Attributes/Encrypted.php": "2026-03-22"
+            }
+        },
+        "state-machine": {
+            "doc_file": "docs/state-machine.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Attributes/StateMachine.php": "2026-03-21",
+                "fennec/Framework/Core/StateMachine/HasStateMachine.php": "2026-03-21",
+                "fennec/Framework/Core/StateMachine/StateMachineEngine.php": "2026-03-22"
+            }
+        },
+        "feature-flags": {
+            "doc_file": "docs/feature-flags.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Feature/FeatureFlag.php": "2026-03-22",
+                "fennec/Framework/Core/Feature/FeatureFlagBuilder.php": "2026-03-21",
+                "fennec/Framework/Commands/FeatureFlagCommand.php": "2026-03-21"
+            }
+        },
+        "rate-limiter": {
+            "doc_file": "docs/rate-limiter.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/RateLimiter.php": "2026-03-21",
+                "fennec/Framework/Core/RateLimiter/RateLimiterStoreInterface.php": "2026-03-21",
+                "fennec/Framework/Core/RateLimiter/InMemoryStore.php": "2026-03-22",
+                "fennec/Framework/Core/RateLimiter/RedisStore.php": "2026-03-22",
+                "fennec/Framework/Middleware/RateLimitMiddleware.php": "2026-03-22",
+                "fennec/Framework/Attributes/RateLimit.php": "2026-03-21"
+            }
+        },
+        "profiler": {
+            "doc_file": "docs/profiler.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Profiler/Profiler.php": "2026-03-21",
+                "fennec/Framework/Core/Profiler/ProfileEntry.php": "2026-03-21",
+                "fennec/Framework/Core/Profiler/ProfilerStorageInterface.php": "2026-03-21",
+                "fennec/Framework/Core/Profiler/InMemoryStorage.php": "2026-03-22",
+                "fennec/Framework/Middleware/ProfilerMiddleware.php": "2026-03-21"
+            }
+        },
+        "scheduler": {
+            "doc_file": "docs/scheduler.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Scheduler/Schedule.php": "2026-03-21",
+                "fennec/Framework/Core/Scheduler/ScheduledTask.php": "2026-03-21",
+                "fennec/Framework/Core/Scheduler/CronExpression.php": "2026-03-21",
+                "fennec/Framework/Core/Scheduler/Scheduler.php": "2026-03-21",
+                "fennec/Framework/Commands/ScheduleRunCommand.php": "2026-03-21",
+                "app/Schedule.php": "2026-03-21"
+            }
+        },
+        "security": {
+            "doc_file": "docs/security.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Security/PasswordPolicy.php": "2026-03-22",
+                "fennec/Framework/Core/Security/AccountLockout.php": "2026-03-22",
+                "fennec/Framework/Core/Security/SecurityLogger.php": "2026-03-22",
+                "fennec/Framework/Middleware/IpAllowlistMiddleware.php": "2026-03-22"
+            }
+        },
+        "logging": {
+            "doc_file": "docs/logging.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Logger.php": "2026-03-22",
+                "fennec/Framework/Core/Logging/LogMaskingProcessor.php": "2026-03-22",
+                "fennec/Framework/Core/Security/SecurityLogger.php": "2026-03-22"
+            }
+        },
+        "image": {
+            "doc_file": "docs/image.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Image/ImageTransformer.php": "2026-03-22",
+                "fennec/Framework/Core/Image/ImageTransformPipeline.php": "2026-03-22",
+                "fennec/Framework/Attributes/ImageTransform.php": "2026-03-22"
+            }
+        },
+        "oauth": {
+            "doc_file": "docs/oauth.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/OAuth/OAuthManager.php": "2026-03-21",
+                "fennec/Framework/Core/OAuth/OAuthProvider.php": "2026-03-21",
+                "fennec/Framework/Core/OAuth/OAuthToken.php": "2026-03-21",
+                "fennec/Framework/Core/OAuth/OAuthUser.php": "2026-03-21",
+                "fennec/Framework/Core/OAuth/Providers/GoogleProvider.php": "2026-03-21",
+                "fennec/Framework/Core/OAuth/Providers/GitHubProvider.php": "2026-03-21"
+            }
+        },
+        "redis": {
+            "doc_file": "docs/redis.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Redis/RedisConnection.php": "2026-03-21",
+                "fennec/Framework/Core/Redis/RedisLock.php": "2026-03-22"
+            }
+        },
+        "tenant": {
+            "doc_file": "docs/tenant.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/TenantManager.php": "2026-03-21",
+                "fennec/Framework/Middleware/TenantMiddleware.php": "2026-03-21",
+                "fennec/Framework/Commands/MakeTenantCommand.php": "2026-03-22"
+            }
+        },
+        "cli": {
+            "doc_file": "docs/cli.md",
+            "last_documented": "2026-03-23",
+            "files": {
+                "fennec/bin/cli": "2026-03-21",
+                "fennec/Framework/Core/Cli/CommandInterface.php": "2026-03-21",
+                "fennec/Framework/Core/Cli/CommandRunner.php": "2026-03-23",
+                "fennec/Framework/Commands/QualityCommand.php": "2026-03-23",
+                "fennec/Framework/Commands/TestIntegrationCommand.php": "2026-03-23",
+                "fennec/Framework/Attributes/Command.php": "2026-03-21"
+            }
+        },
+        "ui-dashboard": {
+            "doc_file": "docs/ui-dashboard.md",
+            "last_documented": "2026-03-22",
+            "files": {
+                "fennec/Framework/Core/Ui/UiController.php": "2026-03-22",
+                "fennec/Framework/Core/Ui/UiRoutes.php": "2026-03-22",
+                "fennec/Framework/Middleware/UiAuthMiddleware.php": "2026-03-22",
+                "fennec/Framework/Commands/UiCommand.php": "2026-03-22"
+            }
+        },
+        "webhook": {
+            "doc_file": "docs/webhook.md",
+            "last_documented": "2026-03-23",
+            "files": {
+                "fennec/Framework/Core/Webhook/WebhookManager.php": "2026-03-22",
+                "fennec/Framework/Core/Webhook/WebhookDeliveryJob.php": "2026-03-22",
+                "fennec/Framework/Core/Notification/Channels/WebhookChannel.php": "2026-03-22",
+                "fennec/Framework/Commands/MakeWebhookCommand.php": "2026-03-22",
+                "fennec/database/migrations/2026_03_22_012911_create_webhooks_tables.php": "2026-03-22",
+                "app/Controllers/WebhookController.php": "2026-03-23",
+                "app/Models/Webhook.php": "2026-03-23",
+                "app/Models/WebhookDelivery.php": "2026-03-23",
+                "app/Dto/WebhookStoreRequest.php": "2026-03-23",
+                "app/Dto/WebhookItem.php": "2026-03-23",
+                "app/Dto/WebhookDeliveryItem.php": "2026-03-23",
+                "app/Dto/WebhookResponse.php": "2026-03-23",
+                "app/Dto/WebhookListRequest.php": "2026-03-23",
+                "app/Routes/webhook.php": "2026-03-23"
+            }
+        },
+        "architecture": {
+            "doc_file": "docs/architecture.md",
+            "last_documented": "2026-03-23",
+            "files": {
+                "fennec/Framework/Core/App.php": "2026-03-23",
+                "fennec/docker/Dockerfile.frankenphp": "2026-03-23",
+                "fennec/docker/Dockerfile.fpm": "2026-03-23",
+                "fennec/docker/Caddyfile": "2026-03-23",
+                "fennec/docker/nginx.conf": "2026-03-23"
+            }
+        },
+        "testing": {
+            "doc_file": "docs/testing.md",
+            "last_documented": "2026-03-26",
+            "files": {
+                "fennec/Framework/Commands/MakeTestCommand.php": "2026-03-26",
+                "fennec/Framework/Commands/TestCommand.php": "2026-03-26",
+                "fennec/Framework/Commands/QualityCommand.php": "2026-03-26"
+            }
+        }
     }
-  }
 }

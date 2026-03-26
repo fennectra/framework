@@ -9,7 +9,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/PHP-8.3+-8892BF?logo=php&logoColor=white" alt="PHP 8.3+">
   <img src="https://img.shields.io/badge/PHPStan-level%205-brightgreen?logo=php" alt="PHPStan Level 5">
-  <img src="https://img.shields.io/badge/PHPUnit-320%2B%20tests-brightgreen?logo=php" alt="PHPUnit 320+ tests">
+  <img src="https://img.shields.io/badge/PHPUnit-285%2B%20tests-brightgreen?logo=php" alt="PHPUnit 285+ tests">
   <img src="https://img.shields.io/badge/DB-PostgreSQL%20%7C%20MySQL%20%7C%20SQLite-336791?logo=postgresql&logoColor=white" alt="Multi-DB">
   <img src="https://img.shields.io/badge/FrankenPHP-worker-blueviolet?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQTEwIDEwIDAgMCAyIDIgMTJhMTAgMTAgMCAwIDAgMTAgMTAgMTAgMTAgMCAwIDAgMTAtMTBBMTAgMTAgMCAwIDAgMTIgMnoiLz48L3N2Zz4=" alt="FrankenPHP">
   <img src="https://img.shields.io/badge/Deploy-GKE-4285F4?logo=googlecloud&logoColor=white" alt="GKE">
@@ -119,6 +119,11 @@ app/                    ← your application code
   Jobs/                 ← job classes for the queue
   config/tenants.php    ← multi-tenancy mapping (domain/port → database)
   Schedule.php          ← scheduled tasks
+
+tests/                  ← application tests
+  TestCase.php          ← base test class (DB helpers)
+  Unit/                 ← unit tests (pure logic)
+  Feature/              ← feature tests (with DB)
 
 storage/                ← uploaded files (local driver)
 
@@ -382,6 +387,8 @@ $errors = Validator::validate(ProductRequest::class, $requestData);
 ./forge make:route Product --prefix=/product --middleware=auth
 ./forge make:event UserCreated
 ./forge make:listener SendWelcomeEmail
+./forge make:test ProductService                 # unit test
+./forge make:test Auth/Login --feature           # feature test
 ```
 
 ### Migrations & Seeding
@@ -432,6 +439,18 @@ $errors = Validator::validate(ProductRequest::class, $requestData);
 
 ```bash
 ./forge storage:link                 # symlink public/storage → storage/
+```
+
+### Testing
+
+```bash
+./forge test                         # run all tests
+./forge test --unit                  # unit tests only
+./forge test --feature               # feature tests only
+./forge test --filter=UserService    # specific test
+./forge test --coverage              # with code coverage
+./forge make:test UserService        # create a unit test
+./forge make:test Auth/Login --feature  # create a feature test
 ```
 
 ### Quality & Cache
@@ -715,8 +734,35 @@ composer lint:fix                # auto-fix
 ```
 
 - **PHPUnit 11** — tests in `tests/`
-- **PHPStan** — static analysis
+- **PHPStan** — static analysis level 5
 - **PHP-CS-Fixer** — PSR-12 style
+
+### Application Testing
+
+Fennectra supports unit and feature testing in your app out of the box:
+
+```bash
+# Scaffold a test (auto-creates phpunit.xml + TestCase if missing)
+./forge make:test UserService                # tests/Unit/UserServiceTest.php
+./forge make:test Auth/Login --feature       # tests/Feature/Auth/LoginTest.php
+
+# Run tests
+./forge test                                 # all tests
+./forge test --unit                          # unit tests only
+./forge test --feature                       # feature tests only
+./forge test --filter=UserServiceTest        # specific test
+```
+
+**Test structure:**
+
+```
+tests/
+├── TestCase.php       ← base class (DB helpers, .env loading)
+├── Unit/              ← pure logic tests (no DB)
+└── Feature/           ← integration tests (with DB)
+```
+
+Unit tests extend `PHPUnit\Framework\TestCase`. Feature tests extend `Tests\TestCase` which provides `query()` and `queryOne()` helpers for database assertions.
 
 </details>
 
@@ -1956,4 +2002,4 @@ Each command is **idempotent** — re-running does not duplicate anything.
 ---
 
 **Dependencies:** `monolog/monolog` · `firebase/php-jwt` · `dompdf/dompdf` · `intervention/image` · `aws/aws-sdk-php` · `google/cloud-storage`
-**PHP:** >= 8.3 | **Runtime:** FrankenPHP Worker or PHP-FPM | **License:** Proprietary
+**PHP:** >= 8.3 | **Runtime:** FrankenPHP Worker or PHP-FPM | **License:** MIT
