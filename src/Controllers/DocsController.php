@@ -229,6 +229,8 @@ HTML;
             $schemas[$name] = $schema;
         }
 
+        $tagGroups = $this->buildTagGroups($tagDescriptions);
+
         $spec = [
             'openapi' => '3.0.3',
             'info' => [
@@ -244,6 +246,7 @@ HTML;
                 array_keys($tagDescriptions),
                 array_values($tagDescriptions)
             ),
+            'x-tagGroups' => $tagGroups,
             'paths' => $paths ?: new \stdClass(),
             'components' => [
                 'securitySchemes' => [
@@ -564,9 +567,41 @@ HTML;
 
     private function extractTag(string $path): string
     {
-        $segments = array_filter(explode('/', $path));
+        $segments = array_values(array_filter(explode('/', $path)));
 
-        return ucfirst(reset($segments) ?: 'General');
+        if (count($segments) >= 2) {
+            return ucfirst($segments[0]) . '/' . ucfirst($segments[1]);
+        }
+
+        return ucfirst($segments[0] ?? 'General');
+    }
+
+    /**
+     * Build x-tagGroups from collected tags: groups tags by their first segment.
+     * Example: tags "App/Users", "App/Roles", "Auth/Login" → groups "App" and "Auth".
+     */
+    private function buildTagGroups(array $tagDescriptions): array
+    {
+        $groups = [];
+
+        foreach (array_keys($tagDescriptions) as $tag) {
+            if (str_contains($tag, '/')) {
+                $group = explode('/', $tag, 2)[0];
+            } else {
+                $group = $tag;
+            }
+
+            if (!isset($groups[$group])) {
+                $groups[$group] = [];
+            }
+            $groups[$group][] = $tag;
+        }
+
+        return array_map(
+            fn (string $name, array $tags) => ['name' => $name, 'tags' => $tags],
+            array_keys($groups),
+            array_values($groups)
+        );
     }
 
     private function requiresAuth(?array $middleware): bool

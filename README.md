@@ -705,7 +705,7 @@ The Container is accessible via `$app->container()` or `Container::getInstance()
 <details>
 <summary><strong>Auto-generated API Documentation</strong></summary>
 
-OpenAPI documentation automatically generated from code:
+OpenAPI documentation automatically generated from code — **routes registered automatically by the framework**.
 
 - **Scalar UI:** [http://localhost:8080/docs](http://localhost:8080/docs)
 - **OpenAPI JSON:** [http://localhost:8080/docs/openapi](http://localhost:8080/docs/openapi)
@@ -715,6 +715,22 @@ Automatic introspection:
 - `#[ApiDescription]`, `#[ApiStatus]` attributes
 - DTO schemas (fields, types, validation)
 - Required roles and authentication
+- **Two-level sidebar menu** via `x-tagGroups` (based on URL segments)
+
+```env
+DOCS_ENABLED=true          # enable in production (auto in dev)
+DOCS_PREFIX=/api-docs      # custom URL prefix (default: /docs)
+```
+
+### Sidebar grouping
+
+Routes are automatically grouped into a **two-level collapsible menu** based on URL structure:
+
+```
+/app/users/...   → Group "App" → Tag "App/Users"
+/app/roles/...   → Group "App" → Tag "App/Roles"
+/auth/login/...  → Group "Auth" → Tag "Auth/Login"
+```
 
 </details>
 

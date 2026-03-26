@@ -103,7 +103,11 @@ $app->runWorker();
 
 ## OpenAPI Documentation
 
-The built-in `DocsController` auto-generates an OpenAPI 3.0.3 specification from your routes and DTOs.
+The built-in `DocsController` auto-generates an OpenAPI 3.0.3 specification from your routes and DTOs. The docs routes (`/docs` and `/docs/openapi`) are **automatically registered** by the framework — no manual route declaration needed.
+
+**Enabled by default in dev** (`APP_ENV=dev`). Set `DOCS_ENABLED=true` to enable in production.
+
+**Customizable prefix**: set `DOCS_PREFIX` to change the URL (default: `/docs`). Example: `DOCS_PREFIX=/api-docs`.
 
 **Server URL auto-detection**: if `APP_URL` is not set, the server URL is automatically detected from the incoming HTTP request (scheme, host, port). This means you do not need to configure `APP_URL` for development or single-server deployments.
 
@@ -114,10 +118,38 @@ The built-in `DocsController` auto-generates an OpenAPI 3.0.3 specification from
 
 **OAuth2 token URL**: the OAuth2 password flow `tokenUrl` is configurable via `AUTH_TOKEN_URL` (default: `/auth/login`).
 
+### Two-level menu grouping (x-tagGroups)
+
+The sidebar menu in Scalar is automatically organized into **two levels** based on your URL structure:
+
+```
+/app/users/...       → Group "App" → Tag "App/Users"
+/app/roles/...       → Group "App" → Tag "App/Roles"
+/auth/login/...      → Group "Auth" → Tag "Auth/Login"
+```
+
+This produces a collapsible sidebar:
+
+```
+▼ App
+    ▼ Users
+        List users         GET
+        Create user        POST
+    ▼ Roles
+        List roles         GET
+▼ Auth
+    ▼ Login
+        Generate token     POST
+```
+
+The grouping is automatic — just organize your routes with meaningful prefixes. Routes with a single segment (e.g., `/health`) appear under their own top-level group.
+
 ## Configuration
 
 | Variable | Description | Default |
 |---|---|---|
+| `DOCS_ENABLED` | Enable API documentation | `true` in dev, `false` in prod |
+| `DOCS_PREFIX` | URL prefix for docs routes | `/docs` |
 | `APP_ENV` | Environment (`dev`/`prod`) | `prod` |
 | `APP_NAME` | Application name (used in OpenAPI docs) | `Fennectra API` |
 | `APP_DESCRIPTION` | Application description (OpenAPI) | `REST API built with Fennectra` |
