@@ -48,7 +48,6 @@ HTML;
         $paths = [];
         $usedSchemas = [];
         $tagDescriptions = [];
-        $groupRegistry = [];
 
         foreach ($routes as $route) {
             $docsPrefix = Env::get('DOCS_PREFIX', '/docs');
@@ -58,16 +57,8 @@ HTML;
 
             $path = $route['path'] ?: '/';
             $method = strtolower($route['method']);
-            $tagInfo = $this->extractTagAndGroup($path);
-            $tag = $tagInfo['tag'];
-            $group = $tagInfo['group'];
+            $tag = $this->extractTag($path);
             $requiresAuth = $this->requiresAuth($route['middleware']);
-
-            // Register tag in its group
-            if (!isset($groupRegistry[$group])) {
-                $groupRegistry[$group] = [];
-            }
-            $groupRegistry[$group][] = $tag;
 
             // Collecter les descriptions de groupes par tag
             if (!empty($route['description']) && !isset($tagDescriptions[$tag])) {
@@ -77,7 +68,7 @@ HTML;
 
             $modelName = $this->resolveModelFromAction($route['controller'], $route['action']);
             $controllerShort = $this->shortClass($route['controller']);
-            $operationId = $group . '_' . $tag . '_' . $route['action'];
+            $operationId = $tag . '_' . $route['action'];
 
             // Lire les types PHP sur la méthode du contrôleur
             $methodTypes = $this->readMethodTypes($route['controller'], $route['action']);
@@ -238,8 +229,6 @@ HTML;
             $schemas[$name] = $schema;
         }
 
-        $tagGroups = $this->buildTagGroups($groupRegistry);
-
         $spec = [
             'openapi' => '3.0.3',
             'info' => [
@@ -255,7 +244,6 @@ HTML;
                 array_keys($tagDescriptions),
                 array_values($tagDescriptions)
             ),
-            'x-tagGroups' => $tagGroups,
             'paths' => $paths ?: new \stdClass(),
             'components' => [
                 'securitySchemes' => [
@@ -574,58 +562,11 @@ HTML;
         return $word;
     }
 
-    /**
-     * Extract tag name and group from a route path.
-     *
-     * Only static segments count — dynamic params ({id}, {slug}) are ignored.
-     *
-     * 1 static segment:  /health              → group "General", tag "General"
-     * 2 static segments: /app/manager         → group "App",     tag "App"       (flat)
-     * 3+ static segments: /app/dashboard/kpi  → group "App",     tag "Dashboard" (nested)
-     *
-     * @return array{tag: string, group: string}
-     */
-    private function extractTagAndGroup(string $path): array
+    private function extractTag(string $path): string
     {
-        $segments = array_values(array_filter(explode('/', $path)));
-        // Filter out dynamic params like {id}
-        $static = array_values(array_filter($segments, fn ($s) => !str_starts_with($s, '{')));
+        $segments = array_filter(explode('/', $path));
 
-        if (count($static) >= 3) {
-            // /app/dashboard/kpi → group "App", tag "Dashboard"
-            return [
-                'tag' => ucfirst($static[1]),
-                'group' => ucfirst($static[0]),
-            ];
-        }
-
-        if (count($static) >= 1) {
-            // /app/manager → group "App", tag "App" (flat — one level)
-            // /health      → group "Health", tag "Health"
-            return [
-                'tag' => ucfirst($static[0]),
-                'group' => ucfirst($static[0]),
-            ];
-        }
-
-        return [
-            'tag' => 'General',
-            'group' => 'General',
-        ];
-    }
-
-    /**
-     * Build x-tagGroups from the group registry.
-     */
-    private function buildTagGroups(array $groupRegistry): array
-    {
-        $result = [];
-
-        foreach ($groupRegistry as $group => $tags) {
-            $result[] = ['name' => $group, 'tags' => array_values(array_unique($tags))];
-        }
-
-        return $result;
+        return ucfirst(reset($segments) ?: 'General');
     }
 
     private function requiresAuth(?array $middleware): bool
