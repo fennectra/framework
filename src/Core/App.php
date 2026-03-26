@@ -93,6 +93,14 @@ class App
         // Router
         $this->router = new Router($this->container);
 
+        // API Documentation — enabled via DOCS_ENABLED=true or APP_ENV=dev
+        $docsEnabled = Env::get('DOCS_ENABLED', Env::get('APP_ENV') === 'dev' ? 'true' : 'false') === 'true';
+        if ($docsEnabled) {
+            $docsPrefix = Env::get('DOCS_PREFIX', '/docs');
+            $this->router->get($docsPrefix, [\Fennec\Controllers\DocsController::class, 'ui']);
+            $this->router->get($docsPrefix . '/openapi', [\Fennec\Controllers\DocsController::class, 'openapi']);
+        }
+
         // Fennec UI routes (super admin dashboard)
         if (Env::get('UI_ADMIN_EMAIL')) {
             Ui\UiRoutes::register($this->router);

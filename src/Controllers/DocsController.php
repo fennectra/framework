@@ -20,8 +20,9 @@ class DocsController
 
     public function ui(): void
     {
+        $prefix = Env::get('DOCS_PREFIX', '/docs');
         header('Content-Type: text/html; charset=utf-8');
-        echo <<<'HTML'
+        echo <<<HTML
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -30,7 +31,7 @@ class DocsController
     <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
-    <script id="api-reference" data-url="/docs/openapi"></script>
+    <script id="api-reference" data-url="{$prefix}/openapi"></script>
     <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 </body>
 </html>
@@ -49,7 +50,8 @@ HTML;
         $tagDescriptions = [];
 
         foreach ($routes as $route) {
-            if (str_starts_with($route['path'], '/docs')) {
+            $docsPrefix = Env::get('DOCS_PREFIX', '/docs');
+            if (str_starts_with($route['path'], $docsPrefix)) {
                 continue;
             }
 
