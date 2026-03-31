@@ -4,6 +4,7 @@ namespace Fennec\Core\Ui;
 
 use Fennec\Core\DB;
 use Fennec\Core\Response;
+use Fennec\Core\Security\Hash;
 use Fennec\Core\Security\SecurityLogger;
 
 class UiUsersController
@@ -154,7 +155,7 @@ class UiUsersController
         }
 
         try {
-            $hash = password_hash($password, PASSWORD_BCRYPT);
+            $hash = Hash::make($password);
             DB::raw('UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [$hash, $id]);
             SecurityLogger::track('user.password_reset', ['id' => $id, 'by' => 'admin_ui']);
 

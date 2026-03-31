@@ -1125,6 +1125,7 @@ use Fennec\Attributes\ApiStatus;
 use Fennec\Core\Env;
 use Fennec\Core\HttpException;
 use Fennec\Core\JwtService;
+use Fennec\Core\Security\Hash;
 use Fennec\Core\Validator;
 
 class AuthController
@@ -1152,7 +1153,7 @@ class AuthController
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => password_hash($request->password, PASSWORD_BCRYPT),
+            'password' => Hash::make($request->password),
             'is_active' => 0,
             'activation_token' => $activationToken,
             'role_id' => 3,
@@ -1189,8 +1190,13 @@ class AuthController
 
         $user = User::findByEmail($request->email);
 
-        if (!$user || !password_verify($request->password, $user->password)) {
+        if (!$user || !Hash::verify($request->password, $user->password)) {
             throw new HttpException(401, 'Invalid credentials.');
+        }
+
+        // Rehash if algorithm or cost changed since this hash was created
+        if (Hash::needsRehash($user->password)) {
+            $user->update(['password' => Hash::make($request->password)]);
         }
 
         if (!$user->is_active) {
@@ -1304,7 +1310,7 @@ class AuthController
         }
 
         $user->update([
-            'password' => password_hash($request->password, PASSWORD_BCRYPT),
+            'password' => Hash::make($request->password),
             'reset_token' => null,
             'reset_token_expires_at' => null,
         ]);
@@ -2037,6 +2043,7 @@ PHP;
 
 use Fennec\Core\DB;
 use Fennec\Core\Migration\Seeder;
+use Fennec\Core\Security\Hash;
 
 class AuthSeeder extends Seeder
 {
@@ -2116,7 +2123,7 @@ class AuthSeeder extends Seeder
             [
                 'name' => 'Admin',
                 'email' => 'admin@fennectra.dev',
-                'password' => password_hash('password123', PASSWORD_BCRYPT),
+                'password' => Hash::make('password123'),
                 'now' => $now,
             ]
         );
