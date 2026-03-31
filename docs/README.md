@@ -2,7 +2,7 @@
 
 > Technical documentation for the high-performance PHP 8.3+ framework with FrankenPHP worker.
 
-*Generated on 2026-03-22 — 34 documented modules*
+*Generated on 2026-03-31 — 35 documented modules*
 
 ---
 
@@ -76,7 +76,8 @@
 | Module | Description |
 |---|---|
 | [Image](image.md) | Image transformation with chainable pipeline, format detection and Storage integration |
-| [OAuth](oauth.md) | OAuth2 authentication with Google and GitHub via an extensible manager |
+| [OAuth / OIDC](oauth.md) | OAuth2 and OpenID Connect with Google, GitHub, and any OIDC provider (France Travail, Keycloak, Azure AD...) |
+| [SAML 2.0](saml.md) | Native SAML 2.0 Service Provider for enterprise SSO (Active Directory, Okta, Azure AD) |
 | [Tenant](tenant.md) | Multi-tenancy with isolated databases and automatic resolution by domain or port |
 | [UI Dashboard](ui-dashboard.md) | React admin interface for monitoring and managing a Fennec application |
 

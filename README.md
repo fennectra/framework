@@ -29,12 +29,12 @@
 
 <p align="center">
   <strong>High-performance PHP 8.3+ framework</strong><br>
-  JWT · ORM · Events · Worker · Profiler · Scheduler · Queue · Notifications · Webhooks · Images · Feature Flags · Multi-tenant · Storage · PDF · SOC 2 · ISO 27001 · NF525 · GDPR · PostgreSQL · MySQL · SQLite
+  JWT · ORM · Events · Worker · Profiler · Scheduler · Queue · Notifications · Webhooks · Images · Feature Flags · Multi-tenant · Storage · PDF · OAuth · OIDC · SAML · SOC 2 · ISO 27001 · NF525 · GDPR · PostgreSQL · MySQL · SQLite
 </p>
 
 ---
 
-> High-performance PHP 8.3+ framework with Dependency Injection, JWT, auto-generated OpenAPI, CLI, ORM with eager loading, **Multi-database** (PostgreSQL, MySQL, SQLite), Event Dispatcher with multiple brokers, Profiler, Rate Limiting, Migrations, K8s-safe Scheduler, Job Queue, Feature Flags, multi-channel Notifications, **HMAC-SHA256 signed Webhooks**, **Image Transforms** (Intervention/Image), SSE Broadcasting, OAuth, multi-driver Storage (Local, S3, GCS), PDF generation, **GDPR** (consent, DPO dashboard, data subject rights), and FrankenPHP worker support.
+> High-performance PHP 8.3+ framework with Dependency Injection, JWT, auto-generated OpenAPI, CLI, ORM with eager loading, **Multi-database** (PostgreSQL, MySQL, SQLite), Event Dispatcher with multiple brokers, Profiler, Rate Limiting, Migrations, K8s-safe Scheduler, Job Queue, Feature Flags, multi-channel Notifications, **HMAC-SHA256 signed Webhooks**, **Image Transforms** (Intervention/Image), SSE Broadcasting, OAuth2/OIDC/SAML 2.0 SSO, multi-driver Storage (Local, S3, GCS), PDF generation, **GDPR** (consent, DPO dashboard, data subject rights), and FrankenPHP worker support.
 
 ---
 
@@ -67,8 +67,8 @@ cp .env.example .env        # configure DB_DRIVER + credentials + SECRET_KEY
 │ Cache   │Scheduler│  Queue  │ Feature  │  State  │Notificat. │
 │ Redis   │+RedLock │  Jobs   │  Flags   │ Machine │Multi-chan │
 ├─────────┼─────────┼─────────┼──────────┼─────────┼───────────┤
-│Webhooks │  Image  │ Storage │   SSE    │  OAuth  │    PDF    │
-│HMAC-sign│Transform│L/S3/GCS │Broadcast │ G + GH  │  dompdf   │
+│Webhooks │  Image  │ Storage │   SSE    │OAuth/SSO│    PDF    │
+│HMAC-sign│Transform│L/S3/GCS │Broadcast │OIDC+SAML│  dompdf   │
 ├─────────┼─────────┼─────────┼──────────┼─────────┼───────────┤
 │ Audit   │Encrypti.│ Security│  NF525   │  GDPR   │           │
 │ SOC 2   │AES-256  │ Logger  │ Fiscal   │ Consent │           │
@@ -100,7 +100,8 @@ framework/              ← framework core (Packagist: fennectra/framework) (do 
       Webhook/          ← outgoing HMAC-SHA256 webhooks + delivery jobs
       Image/            ← image transformations (GD-based)
       Broadcasting/     ← SSE via Redis Pub/Sub
-      OAuth/            ← Google, GitHub providers
+      OAuth/            ← Google, GitHub, OIDC (OpenID Connect) providers
+      Saml/             ← SAML 2.0 Service Provider (enterprise SSO)
       Audit/            ← HasAuditTrail (SOC 2)
       Encryption/       ← AES-256-GCM at rest (SOC 2)
       Security/         ← SecurityLogger, PasswordPolicy, AccountLockout (ISO 27001)
@@ -1288,55 +1289,92 @@ es.onmessage = (e) => console.log(JSON.parse(e.data));
 </details>
 
 <details>
-<summary><strong>OAuth (Google, GitHub)</strong></summary>
+<summary><strong>OAuth / OpenID Connect / SAML 2.0</strong></summary>
 
-The framework provides an OAuth engine (`src/Core/OAuth/`) with Google and GitHub providers. To use it, generate a controller and routes:
+The framework supports 3 SSO protocols with a unified `OAuthUser` output:
 
-```bash
-./forge make:controller OAuthController
-```
+| Protocol | Use case | Providers |
+|---|---|---|
+| **OAuth2** | Social login | Google, GitHub |
+| **OIDC** | Enterprise/government SSO | Any OIDC-compliant IdP (France Travail, Keycloak, Azure AD, Auth0, Okta...) |
+| **SAML 2.0** | Enterprise SSO | Active Directory, Okta, Azure AD, Keycloak... |
 
-Then configure routes in `app/Routes/`:
-
-```php
-// app/Routes/public.php
-$router->get('/auth/{provider}/redirect', [OAuthController::class, 'redirect']);
-$router->get('/auth/{provider}/callback', [OAuthController::class, 'callback']);
-```
-
-Example usage in the controller:
+### OAuth2 (Google, GitHub)
 
 ```php
 use Fennec\Core\OAuth\OAuthManager;
 
-class OAuthController
-{
-    public function __construct(private OAuthManager $oauth) {}
-
-    public function redirect(string $provider): array
-    {
-        $driver = $this->oauth->driver($provider);
-        $url = $driver->getAuthorizationUrl($state);
-        return ['redirect_url' => $url];
-    }
-
-    public function callback(string $provider): array
-    {
-        $driver = $this->oauth->driver($provider);
-        $token = $driver->getAccessToken($_GET['code']);
-        $user = $driver->getUserInfo($token->accessToken);
-        // create/find the user, generate a JWT...
-    }
-}
+$oauth = new OAuthManager();
+$google = $oauth->driver('google');
+$url = $google->getAuthorizationUrl($state);
+// after callback...
+$token = $google->getAccessToken($code);
+$user = $google->getUserInfo($token->accessToken);
 ```
 
 ```env
 OAUTH_GOOGLE_CLIENT_ID=...
 OAUTH_GOOGLE_CLIENT_SECRET=...
-OAUTH_GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
+OAUTH_GOOGLE_REDIRECT=http://localhost:8080/auth/google/callback
 ```
 
-Zero external dependencies — HTTP via `stream_context_create`.
+### OpenID Connect (any OIDC provider)
+
+```php
+$oidc = $oauth->driver('oidc');
+$url = $oidc->getAuthorizationUrl($state);  // auto-discovery + nonce + optional PKCE
+// after callback...
+$token = $oidc->getAccessToken($code, $codeVerifier);
+$claims = $oidc->validateIdToken($token->idToken, $nonce);  // JWKS signature validation
+$user = $claims->toOAuthUser('oidc');
+
+// Register custom OIDC providers
+$oauth->extend('france_travail', fn () => new GenericOidcProvider(
+    issuer: 'https://authentification-candidat.francetravail.fr/connexion/oauth2',
+    clientId: Env::get('FT_CLIENT_ID'),
+    clientSecret: Env::get('FT_CLIENT_SECRET'),
+    redirectUri: Env::get('FT_REDIRECT'),
+    pkce: true,
+));
+```
+
+```env
+OIDC_ISSUER=https://idp.example.com
+OIDC_CLIENT_ID=...
+OIDC_CLIENT_SECRET=...
+OIDC_REDIRECT=http://localhost:8080/auth/oidc/callback
+OIDC_PKCE=true
+```
+
+### SAML 2.0 (enterprise SSO)
+
+```php
+use Fennec\Core\Saml\SamlConfig;
+use Fennec\Core\Saml\SamlServiceProvider;
+
+$sp = new SamlServiceProvider(SamlConfig::fromEnv());
+
+// Redirect to IdP
+$result = $sp->buildAuthnRequestUrl('/dashboard');
+header('Location: ' . $result['url']);
+
+// Handle POST callback
+$samlUser = $sp->processResponse($_POST['SAMLResponse'], $result['id']);
+$user = $samlUser->toOAuthUser();  // unified OAuthUser
+
+// Serve SP metadata for IdP auto-configuration
+echo $sp->generateMetadata();
+```
+
+```env
+SAML_SP_ENTITY_ID=https://myapp.com
+SAML_SP_ACS_URL=https://myapp.com/saml/acs
+SAML_IDP_ENTITY_ID=https://idp.example.com
+SAML_IDP_SSO_URL=https://idp.example.com/sso
+SAML_IDP_CERTIFICATE="-----BEGIN CERTIFICATE-----..."
+```
+
+Zero external dependencies — native PHP `ext-dom` + `ext-openssl`.
 
 </details>
 
@@ -1926,10 +1964,26 @@ SCHEDULER_ENABLED=1
 # Profiler
 PROFILER_ENABLED=1
 
-# OAuth
+# OAuth (Google, GitHub)
 OAUTH_GOOGLE_CLIENT_ID=
 OAUTH_GOOGLE_CLIENT_SECRET=
-OAUTH_GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
+OAUTH_GOOGLE_REDIRECT=http://localhost:8080/auth/google/callback
+
+# OpenID Connect (any OIDC provider)
+# OIDC_ISSUER=https://idp.example.com
+# OIDC_CLIENT_ID=
+# OIDC_CLIENT_SECRET=
+# OIDC_REDIRECT=http://localhost:8080/auth/oidc/callback
+# OIDC_SCOPES=email,profile
+# OIDC_PKCE=false
+
+# SAML 2.0 (enterprise SSO)
+# SAML_SP_ENTITY_ID=https://myapp.com
+# SAML_SP_ACS_URL=https://myapp.com/saml/acs
+# SAML_IDP_ENTITY_ID=https://idp.example.com
+# SAML_IDP_SSO_URL=https://idp.example.com/sso
+# SAML_IDP_CERTIFICATE=/path/to/idp-cert.pem
+# SAML_WANT_SIGNED=true
 
 # Notifications
 MAIL_HOST=smtp.example.com

@@ -12,6 +12,7 @@ class OAuthToken
         public readonly ?string $refreshToken = null,
         public readonly ?int $expiresIn = null,
         public readonly string $tokenType = 'Bearer',
+        public readonly ?string $idToken = null,
     ) {
     }
 }
