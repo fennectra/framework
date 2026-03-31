@@ -278,7 +278,7 @@ class AuthController
 
         // 2. Verify credentials
         $user = User::findByEmail($dto->email);
-        if (!$user || !password_verify($dto->password, $user['password'])) {
+        if (!$user || !Hash::verify($dto->password, $user['password'])) {
             AccountLockout::recordFailure($dto->email);
             SecurityLogger::alert('auth.failed', ['email' => $dto->email]);
             throw new HttpException(401, 'Invalid credentials');
@@ -305,7 +305,7 @@ class AuthController
 
         $user = User::create([
             'email' => $dto->email,
-            'password' => password_hash($dto->password, PASSWORD_ARGON2ID),
+            'password' => Hash::make($dto->password),
         ]);
 
         SecurityLogger::track('user.registered', ['email' => $dto->email]);

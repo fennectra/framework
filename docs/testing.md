@@ -163,7 +163,7 @@ class UserCreationTest extends TestCase
         User::create([
             'name' => 'John Doe',
             'email' => 'john@example.com',
-            'password' => password_hash('secret', PASSWORD_BCRYPT),
+            'password' => Hash::make('secret'),
         ]);
 
         $row = $this->queryOne(

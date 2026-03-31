@@ -226,17 +226,61 @@ function changePassword(int $userId, string $newPassword): void
     PasswordPolicy::assertValid($newPassword);
 
     $user = User::find($userId);
-    $user->password = password_hash($newPassword, PASSWORD_ARGON2ID);
+    $user->password = Hash::make($newPassword);
     $user->save();
 
     SecurityLogger::track('password.changed', ['user_id' => $userId]);
 }
 ```
 
+## Password Hashing (Hash Facade)
+
+The `Hash` class provides configurable password hashing via environment variables.
+
+### Configuration (.env)
+
+```env
+# Algorithm: bcrypt | argon2i | argon2id (default: bcrypt)
+PASSWORD_HASH_ALGO=bcrypt
+
+# Bcrypt cost (4-31, default: 12)
+PASSWORD_HASH_COST=12
+
+# Argon2 options (only used when algo is argon2i or argon2id)
+PASSWORD_HASH_MEMORY=65536    # Memory cost in KB
+PASSWORD_HASH_TIME=4          # Time cost (iterations)
+PASSWORD_HASH_THREADS=1       # Parallelism
+```
+
+### Usage
+
+```php
+use Fennec\Core\Security\Hash;
+
+// Hash a password
+$hash = Hash::make($password);
+
+// Verify a password
+if (Hash::verify($password, $user->password)) {
+    // Transparent rehash when algorithm or cost changes
+    if (Hash::needsRehash($user->password)) {
+        $user->update(['password' => Hash::make($password)]);
+    }
+}
+
+// Check current algorithm
+Hash::algorithmName(); // 'bcrypt', 'argon2i', or 'argon2id'
+```
+
+### Migrating algorithms
+
+Changing `PASSWORD_HASH_ALGO` in `.env` is safe: existing passwords continue to verify (PHP's `password_verify` is algorithm-agnostic). Old hashes are automatically upgraded to the new algorithm on next successful login via `Hash::needsRehash()`.
+
 ## Module Files
 
 | File | Description |
 |---|---|
+| `src/Core/Security/Hash.php` | Configurable password hashing facade |
 | `src/Core/Security/PasswordPolicy.php` | Password strength validation |
 | `src/Core/Security/AccountLockout.php` | Account lockout with Redis/file |
 | `src/Core/Security/SecurityLogger.php` | Secure Monolog channel with HMAC chain |
