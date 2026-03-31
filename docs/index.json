@@ -1,6 +1,6 @@
 {
     "generated_at": "2026-03-22",
-    "last_updated": "2026-03-26",
+    "last_updated": "2026-03-31",
     "modules": {
         "app": {
             "doc_file": "docs/app.md",
@@ -116,7 +116,7 @@
         },
         "authentication": {
             "doc_file": "docs/authentication.md",
-            "last_documented": "2026-03-23",
+            "last_documented": "2026-03-31",
             "files": {
                 "fennec/Framework/Core/JwtService.php": "2026-03-22",
                 "fennec/Framework/Middleware/AuthMiddleware.php": "2026-03-22",
@@ -302,8 +302,9 @@
         },
         "security": {
             "doc_file": "docs/security.md",
-            "last_documented": "2026-03-22",
+            "last_documented": "2026-03-31",
             "files": {
+                "fennec/Framework/Core/Security/Hash.php": "2026-03-31",
                 "fennec/Framework/Core/Security/PasswordPolicy.php": "2026-03-22",
                 "fennec/Framework/Core/Security/AccountLockout.php": "2026-03-22",
                 "fennec/Framework/Core/Security/SecurityLogger.php": "2026-03-22",
@@ -330,14 +331,28 @@
         },
         "oauth": {
             "doc_file": "docs/oauth.md",
-            "last_documented": "2026-03-22",
+            "last_documented": "2026-03-31",
             "files": {
-                "fennec/Framework/Core/OAuth/OAuthManager.php": "2026-03-21",
-                "fennec/Framework/Core/OAuth/OAuthProvider.php": "2026-03-21",
-                "fennec/Framework/Core/OAuth/OAuthToken.php": "2026-03-21",
+                "fennec/Framework/Core/OAuth/OAuthManager.php": "2026-03-31",
+                "fennec/Framework/Core/OAuth/OAuthProvider.php": "2026-03-31",
+                "fennec/Framework/Core/OAuth/OidcProvider.php": "2026-03-31",
+                "fennec/Framework/Core/OAuth/OAuthToken.php": "2026-03-31",
                 "fennec/Framework/Core/OAuth/OAuthUser.php": "2026-03-21",
+                "fennec/Framework/Core/OAuth/OidcClaims.php": "2026-03-31",
                 "fennec/Framework/Core/OAuth/Providers/GoogleProvider.php": "2026-03-21",
-                "fennec/Framework/Core/OAuth/Providers/GitHubProvider.php": "2026-03-21"
+                "fennec/Framework/Core/OAuth/Providers/GitHubProvider.php": "2026-03-21",
+                "fennec/Framework/Core/OAuth/Providers/GenericOidcProvider.php": "2026-03-31"
+            }
+        },
+        "saml": {
+            "doc_file": "docs/saml.md",
+            "last_documented": "2026-03-31",
+            "files": {
+                "fennec/Framework/Core/Saml/SamlServiceProvider.php": "2026-03-31",
+                "fennec/Framework/Core/Saml/SamlResponse.php": "2026-03-31",
+                "fennec/Framework/Core/Saml/SamlConfig.php": "2026-03-31",
+                "fennec/Framework/Core/Saml/SamlUser.php": "2026-03-31",
+                "fennec/Framework/Core/Saml/SamlException.php": "2026-03-31"
             }
         },
         "redis": {
@@ -412,7 +427,7 @@
         },
         "testing": {
             "doc_file": "docs/testing.md",
-            "last_documented": "2026-03-26",
+            "last_documented": "2026-03-31",
             "files": {
                 "fennec/Framework/Commands/MakeTestCommand.php": "2026-03-26",
                 "fennec/Framework/Commands/TestCommand.php": "2026-03-26",
